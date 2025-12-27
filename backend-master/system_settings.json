@@ -1,0 +1,35 @@
+{
+  "system": {
+    "name": "NetMgr 网络管理系统",
+    "description": "企业级网络设备管理系统",
+    "language": "zh-CN",
+    "timezone": "Asia/Shanghai"
+  },
+  "scan": {
+    "interval": 3600,
+    "ip_ranges": [
+      "192.168.1.0/24"
+    ],
+    "ports": [
+      22,
+      23,
+      80,
+      443
+    ],
+    "timeout": 5
+  },
+  "notification": {
+    "email_enabled": false,
+    "smtp_server": "",
+    "smtp_port": 587,
+    "smtp_username": "",
+    "smtp_password": "",
+    "sms_enabled": false,
+    "sms_api_url": "",
+    "sms_api_key": ""
+  },
+  "maintenance": {
+    "log_retention_days": 30,
+    "backup_retention_days": 90
+  }
+}

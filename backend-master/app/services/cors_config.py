@@ -1,0 +1,26 @@
+"""
+CORS配置模块
+用于配置跨域资源共享策略
+"""
+
+import os
+
+# 生产环境应该配置具体的域名而不是使用通配符
+# 示例配置：
+# ALLOWED_ORIGINS = [
+#     "https://your-frontend-domain.com",
+#     "https://admin.your-domain.com",
+# ]
+
+# 从环境变量获取允许的源，如果没有则使用通配符（仅限开发环境）
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",") if os.getenv("ALLOWED_ORIGINS") else ["*"]
+
+# 生产环境中应该明确指定允许的方法和头部
+ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "*").split(",") if os.getenv("ALLOWED_METHODS") else ["*"]
+ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "*").split(",") if os.getenv("ALLOWED_HEADERS") else ["*"]
+
+# 配置说明：
+# 1. 生产环境中应该将 ALLOWED_ORIGINS 设置为具体的前端域名
+#    可通过环境变量ALLOWED_ORIGINS设置，多个域名用逗号分隔
+# 2. 可以根据需要限制允许的HTTP方法和请求头
+# 3. 对于API-only的服务，可以考虑禁用CORS，只允许特定IP访问

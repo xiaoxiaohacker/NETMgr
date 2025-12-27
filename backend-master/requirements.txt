@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+mysqlclient
+pydantic[email]
+python-jose
+passlib[bcrypt]
+# Celery和Redis用于异步任务处理（可选）
+celery>=5.2.0,<6.0.0
+redis>=4.0.0,<5.0.0
+netmiko
+pysnmp>=4.4.12,<5.0.0
+cryptography
+python-multipart
+psutil
