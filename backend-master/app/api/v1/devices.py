@@ -227,20 +227,12 @@ def batch_import_devices(
         raise HTTPException(status_code=500, detail=f"批量导入设备失败: {str(e)}")
 
 # 执行ping命令检测设备连通性
-def ping_host(ip: str) -> dict:
-    """执行ping命令检测设备连通性
-    
-    Args:
-        ip: 设备IP地址
-        
-    Returns:
-        dict: 包含ip、is_reachable和response_time的字典
-    """
-    # 根据操作系统选择ping命令参数
-    param = '-n 1' if platform.system().lower() == 'windows' else '-c 1'
-    
+def ping_host(ip: str) -> Dict[str, any]:
+    """检查主机连通性"""
     try:
-        # 执行ping命令
+        # 根据操作系统选择ping参数
+        param = '-n 1' if platform.system().lower() == 'windows' else '-c 1'
+        
         if platform.system().lower() == 'windows':
             # 在Windows上，整个命令作为一个字符串传递
             command = f'ping {param} {ip}'
@@ -249,7 +241,9 @@ def ping_host(ip: str) -> dict:
                 shell=True,  # 使用shell执行
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=10,  # 增加超时时间
+                # 设置环境变量确保输出使用UTF-8编码
+                env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
             )
         else:
             # 在Linux/macOS上，参数拆分成列表项
@@ -258,38 +252,51 @@ def ping_host(ip: str) -> dict:
                 command_parts,
                 capture_output=True,
                 text=True,
-                timeout=2
+                timeout=10  # 增加超时时间
             )
-        
+
         # 检查ping是否成功
         is_reachable = False
         if platform.system().lower() == 'windows':
             # Windows的ping命令输出中包含"来自 xxx.xxx.xxx.xxx 的回复"表示成功
             is_reachable = "来自" in result.stdout and "的回复" in result.stdout
+            # 也支持英文版Windows
+            if not is_reachable:
+                is_reachable = "Reply from" in result.stdout
         else:
             # Linux/macOS使用返回码判断
             is_reachable = result.returncode == 0
-        
+
         # 尝试提取响应时间
         response_time = None
         if is_reachable:
             # 匹配Windows和Linux/macOS的ping输出格式
             if platform.system().lower() == 'windows':
                 # Windows格式: "时间<1ms" 或 "时间=32ms"
-                match = re.search(r'时间[<|=](\d+)ms', result.stdout)
+                match = re.search(r'时间[<|=](\d+\.?\d*)ms', result.stdout)
+                # 英文版Windows格式: "time<1ms" or "time=32ms"
+                if not match:
+                    match = re.search(r'time[<|=](\d+\.?\d*)ms', result.stdout)
             else:
-                # Linux/macOS格式: "time=32 ms"
-                match = re.search(r'time=(\d+)\s+ms', result.stdout)
-            
+                # Linux/macOS格式: "time=32 ms" or "time=32.456 ms"
+                match = re.search(r'time=(\d+\.?\d*)\s*ms', result.stdout)
+
             if match:
-                response_time = int(match.group(1))
-        
+                response_time = float(match.group(1))
+
         logger.debug(f"Ping {ip} 结果: 可达={is_reachable}, 响应时间={response_time}ms, 输出={result.stdout}")
-        
+
         return {
             "ip": ip,
             "is_reachable": is_reachable,
             "response_time": response_time
+        }
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Ping {ip} 超时")
+        return {
+            "ip": ip,
+            "is_reachable": False,
+            "response_time": None
         }
     except Exception as e:
         logger.error(f"Ping {ip} 失败: {str(e)}")

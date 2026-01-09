@@ -92,25 +92,26 @@ async def websocket_device_status(websocket: WebSocket):
             "message": f"WebSocket连接已建立，用户: {user_id}"
         }, ensure_ascii=False))
         
-        # 保持连接
+        # 保持连接，定期发送心跳包
         while True:
-            # 等待消息（但主要用于保持连接）
             try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
-                # 可以处理客户端发送的消息
-                message = json.loads(data)
-                logger.info(f"收到WebSocket消息: {message}")
-            except asyncio.TimeoutError:
-                # 发送ping消息以保持连接
+                # 每隔30秒发送心跳包
+                await asyncio.sleep(30)
+                
+                # 发送心跳消息以保持连接
                 try:
                     await websocket.send_text(json.dumps({
                         "type": "ping",
                         "message": "keepalive"
                     }, ensure_ascii=False))
-                except:
+                except Exception as e:
+                    logger.info(f"发送心跳包失败: {e}")
                     break
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket连接断开，用户: {user_id}")
+                break
             except Exception as e:
-                logger.info(f"接收WebSocket消息时出错: {e}")
+                logger.error(f"WebSocket连接处理异常，用户: {user_id}, 错误: {e}")
                 break
     except WebSocketDisconnect:
         logger.info(f"WebSocket连接断开，用户: {user_id}")

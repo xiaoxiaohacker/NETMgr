@@ -134,11 +134,12 @@ export function getDeviceInterfaceStatus(deviceId, interfaceName, session_token 
  * @returns {Promise}
  */
 export function checkConnectivity(ip, session_token = null) {
-  const params = session_token ? { ...session_token, ip: encodeURIComponent(ip) } : { ip: encodeURIComponent(ip) }
+  const params = session_token ? { session_token, ip: encodeURIComponent(ip) } : { ip: encodeURIComponent(ip) }
   return request({
     url: `/api/v1/devices/check-connectivity`,
     method: 'get',
-    params
+    params,
+    timeout: 30000  // 设置30秒超时，以匹配后端处理时间
   })
 }
 

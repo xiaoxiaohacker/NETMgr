@@ -8,7 +8,7 @@ from app.services.db import engine, get_db
 from app.services.models import Task, TaskStatus, TaskType, Device
 from app.services.config_backup_service import create_config_backup
 from app.services.schemas import ConfigCreate
-from app.services.adapter_factory import AdapterFactory
+from app.services.adapter_manager import AdapterManager
 from app.tasks import backup_device_config_task, batch_process_devices, CELERY_AVAILABLE
 
 # 配置日志
@@ -558,8 +558,8 @@ class TaskScheduler:
     def _direct_backup_device_config(self, device_info, device_id):
         """直接执行设备配置备份，不使用Celery"""
         try:
-            # 创建设备适配器
-            adapter = AdapterFactory.create_adapter(device_info.get('device_type') or "snmp", device_info)
+            # 使用AdapterManager替代AdapterFactory
+            adapter = AdapterManager.get_adapter(device_info)
 
             # 连接到设备并获取配置
             if adapter.connect():

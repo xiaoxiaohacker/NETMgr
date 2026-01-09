@@ -267,6 +267,12 @@ const initWebSocket = () => {
             data.type === 'connection_status') {
           // 这些类型的更新都需要刷新仪表盘数据
           loadDashboardStats()
+          loadRecentAlerts() // 同时刷新告警数据
+          
+          // 触发一个自定义事件，通知其他组件更新
+          window.dispatchEvent(new CustomEvent('device-status-change', {
+            detail: { type: data.type, payload: data }
+          }))
         } else {
           console.log('仪表盘收到未知类型的消息:', data.type)
         }
@@ -720,14 +726,14 @@ const updateCharts = (performanceData, statusTrendData) => {
 
     // 处理状态趋势数据
     if (statusTrendData && statusTrendData.trend) {
-      dates = statusTrendData.trend.dates || [];
-      onlineData = statusTrendData.trend.online || [];
-      offlineData = statusTrendData.trend.offline || [];
+      dates = Array.isArray(statusTrendData.trend.dates) ? statusTrendData.trend.dates : [];
+      onlineData = Array.isArray(statusTrendData.trend.online) ? statusTrendData.trend.online : [];
+      offlineData = Array.isArray(statusTrendData.trend.offline) ? statusTrendData.trend.offline : [];
     } else if (statusTrendData && statusTrendData.status) {
       // 如果只有当前状态数据，创建一周的趋势数据
       dates = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-      const onlineCount = statusTrendData.status.online || 0;
-      const offlineCount = statusTrendData.status.offline || 0;
+      const onlineCount = typeof statusTrendData.status.online === 'number' ? statusTrendData.status.online : 0;
+      const offlineCount = typeof statusTrendData.status.offline === 'number' ? statusTrendData.status.offline : 0;
       onlineData = Array(7).fill(onlineCount);
       offlineData = Array(7).fill(offlineCount);
     }
@@ -735,14 +741,8 @@ const updateCharts = (performanceData, statusTrendData) => {
     // 如果数据为空，提供默认数据
     if (dates.length === 0) {
       dates = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-      onlineData = [dashboardData.value.stats.onlineDevices, dashboardData.value.stats.onlineDevices, 
-                    dashboardData.value.stats.onlineDevices, dashboardData.value.stats.onlineDevices, 
-                    dashboardData.value.stats.onlineDevices, dashboardData.value.stats.onlineDevices, 
-                    dashboardData.value.stats.onlineDevices];
-      offlineData = [dashboardData.value.stats.offlineDevices, dashboardData.value.stats.offlineDevices, 
-                    dashboardData.value.stats.offlineDevices, dashboardData.value.stats.offlineDevices, 
-                    dashboardData.value.stats.offlineDevices, dashboardData.value.stats.offlineDevices, 
-                    dashboardData.value.stats.offlineDevices];
+      onlineData = Array(7).fill(typeof dashboardData.value.stats.onlineDevices === 'number' ? dashboardData.value.stats.onlineDevices : 0);
+      offlineData = Array(7).fill(typeof dashboardData.value.stats.offlineDevices === 'number' ? dashboardData.value.stats.offlineDevices : 0);
     }
 
     console.log("Status trend data:", dates, onlineData, offlineData);
@@ -762,43 +762,94 @@ const updateCharts = (performanceData, statusTrendData) => {
     let memoryData = [];
 
     // 根据后端实际返回的数据结构处理 - 针对新的getDashboardData API
-    if (performanceData && performanceData.cpu_usage) {
+    if (performanceData && performanceData.health_data && performanceData.health_data.cpu_usage) {
       // 处理CPU数据
+      if (Array.isArray(performanceData.health_data.cpu_usage) && performanceData.health_data.cpu_usage.length > 0) {
+        times = performanceData.health_data.cpu_usage.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        cpuData = performanceData.health_data.cpu_usage.map(item => {
+          return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
+      }
+
+      // 处理内存数据
+      if (performanceData.health_data.memory_usage && Array.isArray(performanceData.health_data.memory_usage) && performanceData.health_data.memory_usage.length > 0) {
+        // 如果内存数据的时间点与CPU数据不一致，使用CPU的时间点
+        if (times.length > 0) {
+          memoryData = performanceData.health_data.memory_usage.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
+        } else {
+          // 如果CPU数据为空，使用内存数据的时间点
+          times = performanceData.health_data.memory_usage.map(item => {
+            return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+          });
+          memoryData = performanceData.health_data.memory_usage.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
+        }
+      } else {
+        // 如果内存数据为空，使用CPU时间作为参考
+        memoryData = Array(times.length).fill(0);
+      }
+    } else if (performanceData && performanceData.cpu_usage) {
+      // 兼容旧的API数据结构
       if (Array.isArray(performanceData.cpu_usage) && performanceData.cpu_usage.length > 0) {
-        times = performanceData.cpu_usage.map(item => item.time || item.timestamp || '');
-        cpuData = performanceData.cpu_usage.map(item => item.usage !== undefined ? item.usage : (item.value !== undefined ? item.value : 0));
+        times = performanceData.cpu_usage.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        cpuData = performanceData.cpu_usage.map(item => {
+          return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
       }
 
       // 处理内存数据
       if (performanceData.memory_usage && Array.isArray(performanceData.memory_usage) && performanceData.memory_usage.length > 0) {
         // 如果内存数据的时间点与CPU数据不一致，使用CPU的时间点
         if (times.length > 0) {
-          memoryData = performanceData.memory_usage.map(item => item.usage !== undefined ? item.usage : (item.value !== undefined ? item.value : 0));
+          memoryData = performanceData.memory_usage.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
         } else {
           // 如果CPU数据为空，使用内存数据的时间点
-          times = performanceData.memory_usage.map(item => item.time || item.timestamp || '');
-          memoryData = performanceData.memory_usage.map(item => item.usage !== undefined ? item.usage : (item.value !== undefined ? item.value : 0));
+          times = performanceData.memory_usage.map(item => {
+            return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+          });
+          memoryData = performanceData.memory_usage.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
         }
       } else {
         // 如果内存数据为空，使用CPU时间作为参考
         memoryData = Array(times.length).fill(0);
       }
     } else if (performanceData && performanceData.cpu) {
-      // 兼容旧的API数据结构
+      // 更老的API数据结构
       if (Array.isArray(performanceData.cpu) && performanceData.cpu.length > 0) {
-        times = performanceData.cpu.map(item => item.time || item.timestamp || '');
-        cpuData = performanceData.cpu.map(item => item.usage !== undefined ? item.usage : (item.value !== undefined ? item.value : 0));
+        times = performanceData.cpu.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        cpuData = performanceData.cpu.map(item => {
+          return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
       }
 
       // 处理内存数据
       if (performanceData.memory && Array.isArray(performanceData.memory) && performanceData.memory.length > 0) {
         // 如果内存数据的时间点与CPU数据不一致，使用CPU的时间点
         if (times.length > 0) {
-          memoryData = performanceData.memory.map(item => item.usage !== undefined ? item.usage : (item.value !== undefined ? item.value : 0));
+          memoryData = performanceData.memory.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
         } else {
           // 如果CPU数据为空，使用内存数据的时间点
-          times = performanceData.memory.map(item => item.time || item.timestamp || '');
-          memoryData = performanceData.memory.map(item => item.usage !== undefined ? item.value : 0);
+          times = performanceData.memory.map(item => {
+            return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+          });
+          memoryData = performanceData.memory.map(item => {
+            return typeof item.usage !== 'undefined' ? item.usage : (typeof item.value !== 'undefined' ? item.value : 0);
+          });
         }
       } else {
         // 如果内存数据为空，使用CPU时间作为参考
@@ -830,19 +881,44 @@ const updateCharts = (performanceData, statusTrendData) => {
     let outboundData = [];
 
     // 根据后端实际返回的数据结构处理 - 针对新的getDashboardData API
-    if (performanceData && performanceData.bandwidth_usage) {
+    if (performanceData && performanceData.traffic_data && performanceData.traffic_data.bandwidth_usage) {
       // 处理带宽数据
+      if (Array.isArray(performanceData.traffic_data.bandwidth_usage) && performanceData.traffic_data.bandwidth_usage.length > 0) {
+        times = performanceData.traffic_data.bandwidth_usage.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        inboundData = performanceData.traffic_data.bandwidth_usage.map(item => {
+          return typeof item.in !== 'undefined' ? item.in : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
+        outboundData = performanceData.traffic_data.bandwidth_usage.map(item => {
+          return typeof item.out !== 'undefined' ? item.out : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
+      }
+    } else if (performanceData && performanceData.bandwidth_usage) {
+      // 兼容旧的API数据结构
       if (Array.isArray(performanceData.bandwidth_usage) && performanceData.bandwidth_usage.length > 0) {
-        times = performanceData.bandwidth_usage.map(item => item.time || item.timestamp || '');
-        inboundData = performanceData.bandwidth_usage.map(item => item.in !== undefined ? item.in : (item.value !== undefined ? item.value : 0));
-        outboundData = performanceData.bandwidth_usage.map(item => item.out !== undefined ? item.out : (item.value !== undefined ? item.value : 0));
+        times = performanceData.bandwidth_usage.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        inboundData = performanceData.bandwidth_usage.map(item => {
+          return typeof item.in !== 'undefined' ? item.in : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
+        outboundData = performanceData.bandwidth_usage.map(item => {
+          return typeof item.out !== 'undefined' ? item.out : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
       }
     } else if (performanceData && performanceData.bandwidth) {
-      // 兼容旧的API数据结构
+      // 更老的API数据结构
       if (Array.isArray(performanceData.bandwidth) && performanceData.bandwidth.length > 0) {
-        times = performanceData.bandwidth.map(item => item.time || item.timestamp || '');
-        inboundData = performanceData.bandwidth.map(item => item.in !== undefined ? item.in : (item.value !== undefined ? item.value : 0));
-        outboundData = performanceData.bandwidth.map(item => item.out !== undefined ? item.out : (item.value !== undefined ? item.value : 0));
+        times = performanceData.bandwidth.map(item => {
+          return item.time || item.timestamp || (item.date ? new Date(item.date).toLocaleTimeString() : '');
+        });
+        inboundData = performanceData.bandwidth.map(item => {
+          return typeof item.in !== 'undefined' ? item.in : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
+        outboundData = performanceData.bandwidth.map(item => {
+          return typeof item.out !== 'undefined' ? item.out : (typeof item.value !== 'undefined' ? item.value : 0);
+        });
       }
     }
 
@@ -955,29 +1031,29 @@ const loadDashboardStats = async () => {
     });
 
     // 设置设备统计数据 - 优先使用设备概览API的数据
-    if (overviewRes && overviewRes.online_devices !== undefined) {
-      dashboardData.value.stats.onlineDevices = overviewRes.online_devices || 0
-      dashboardData.value.stats.offlineDevices = overviewRes.offline_devices || 0
-      dashboardData.value.stats.totalDevices = overviewRes.total_devices || 0
-    } else if (overviewRes && overviewRes.data && overviewRes.data.online_devices !== undefined) {
+    if (overviewRes && typeof overviewRes.online_devices !== 'undefined') {
+      dashboardData.value.stats.onlineDevices = typeof overviewRes.online_devices === 'number' ? overviewRes.online_devices : 0
+      dashboardData.value.stats.offlineDevices = typeof overviewRes.offline_devices === 'number' ? overviewRes.offline_devices : 0
+      dashboardData.value.stats.totalDevices = typeof overviewRes.total_devices === 'number' ? overviewRes.total_devices : 0
+    } else if (overviewRes && overviewRes.data && typeof overviewRes.data.online_devices !== 'undefined') {
       // 如果响应包装在data字段中
-      dashboardData.value.stats.onlineDevices = overviewRes.data.online_devices || 0
-      dashboardData.value.stats.offlineDevices = overviewRes.data.offline_devices || 0
-      dashboardData.value.stats.totalDevices = overviewRes.data.total_devices || 0
+      dashboardData.value.stats.onlineDevices = typeof overviewRes.data.online_devices === 'number' ? overviewRes.data.online_devices : 0
+      dashboardData.value.stats.offlineDevices = typeof overviewRes.data.offline_devices === 'number' ? overviewRes.data.offline_devices : 0
+      dashboardData.value.stats.totalDevices = typeof overviewRes.data.total_devices === 'number' ? overviewRes.data.total_devices : 0
     } else {
       // 如果设备概览API没有返回预期数据，使用仪表盘API的统计数据作为备选
       console.warn('设备概览API未返回预期数据结构，尝试其他数据源')
     }
 
     // 设置告警统计数据 - 优先使用告警统计API的数据
-    if (alertStatsRes && alertStatsRes.new !== undefined) {
-      dashboardData.value.stats.unhandledAlarms = alertStatsRes.new || 0
-    } else if (alertStatsRes && alertStatsRes.data && alertStatsRes.data.new !== undefined) {
+    if (alertStatsRes && typeof alertStatsRes.new !== 'undefined') {
+      dashboardData.value.stats.unhandledAlarms = typeof alertStatsRes.new === 'number' ? alertStatsRes.new : 0
+    } else if (alertStatsRes && alertStatsRes.data && typeof alertStatsRes.data.new !== 'undefined') {
       // 如果响应包装在data字段中
-      dashboardData.value.stats.unhandledAlarms = alertStatsRes.data.new || 0
-    } else if (alertStatsRes && alertStatsRes.unhandledAlarms !== undefined) {
+      dashboardData.value.stats.unhandledAlarms = typeof alertStatsRes.data.new === 'number' ? alertStatsRes.data.new : 0
+    } else if (alertStatsRes && typeof alertStatsRes.unhandledAlarms !== 'undefined') {
       // 如果响应直接包含unhandledAlarms字段
-      dashboardData.value.stats.unhandledAlarms = alertStatsRes.unhandledAlarms || 0
+      dashboardData.value.stats.unhandledAlarms = typeof alertStatsRes.unhandledAlarms === 'number' ? alertStatsRes.unhandledAlarms : 0
     } else {
       // 如果告警统计API没有返回预期数据，使用仪表盘API的统计数据作为备选
       console.warn('告警统计API未返回预期数据结构')
@@ -986,18 +1062,18 @@ const loadDashboardStats = async () => {
     // 从新的统一API获取设备健康数据
     if (dashboardDataRes && dashboardDataRes.health_data) {
       // 设置CPU使用率（取最新数据点）
-      if (dashboardDataRes.health_data.cpu_usage && dashboardDataRes.health_data.cpu_usage.length > 0) {
+      if (dashboardDataRes.health_data.cpu_usage && Array.isArray(dashboardDataRes.health_data.cpu_usage) && dashboardDataRes.health_data.cpu_usage.length > 0) {
         const lastCpuData = dashboardDataRes.health_data.cpu_usage[dashboardDataRes.health_data.cpu_usage.length - 1]
-        dashboardData.value.stats.cpuUsage = lastCpuData.usage !== undefined ? lastCpuData.usage : 0
+        dashboardData.value.stats.cpuUsage = typeof lastCpuData.usage !== 'undefined' ? lastCpuData.usage : 0
       } else {
         // 如果后端返回空数组，尝试从其他API获取数据
         console.log('从后端获取的CPU使用率数据为空，尝试从stats API获取')
         try {
           const statsRes = await fetchWithRetry(getDeviceOverview)
-          if (statsRes && statsRes.cpuUsage !== undefined) {
-            dashboardData.value.stats.cpuUsage = statsRes.cpuUsage
-          } else if (statsRes && statsRes.data && statsRes.data.cpuUsage !== undefined) {
-            dashboardData.value.stats.cpuUsage = statsRes.data.cpuUsage
+          if (statsRes && typeof statsRes.cpuUsage !== 'undefined') {
+            dashboardData.value.stats.cpuUsage = typeof statsRes.cpuUsage === 'number' ? statsRes.cpuUsage : 0
+          } else if (statsRes && statsRes.data && typeof statsRes.data.cpuUsage !== 'undefined') {
+            dashboardData.value.stats.cpuUsage = typeof statsRes.data.cpuUsage === 'number' ? statsRes.data.cpuUsage : 0
           } else {
             dashboardData.value.stats.cpuUsage = 0
           }
@@ -1009,15 +1085,15 @@ const loadDashboardStats = async () => {
 
       // 准备性能数据用于图表渲染
       dashboardData.value.performanceData = {
-        cpu: dashboardDataRes.health_data.cpu_usage || [],
-        memory: dashboardDataRes.health_data.memory_usage || [],
-        bandwidth: dashboardDataRes.traffic_data.bandwidth_usage || []
+        cpu: Array.isArray(dashboardDataRes.health_data.cpu_usage) ? dashboardDataRes.health_data.cpu_usage : [],
+        memory: Array.isArray(dashboardDataRes.health_data.memory_usage) ? dashboardDataRes.health_data.memory_usage : [],
+        bandwidth: Array.isArray(dashboardDataRes.traffic_data.bandwidth_usage) ? dashboardDataRes.traffic_data.bandwidth_usage : []
       };
 
       // 准备状态趋势图表数据
       dashboardData.value.statusTrend = {
-        status: dashboardDataRes.status_distribution.status,
-        trend: dashboardDataRes.status_distribution.trend
+        status: dashboardDataRes.status_distribution ? dashboardDataRes.status_distribution.status : {},
+        trend: dashboardDataRes.status_distribution ? dashboardDataRes.status_distribution.trend : {}
       };
     } else {
       console.warn('新的仪表盘API未返回预期数据结构，尝试使用旧API')
@@ -1030,15 +1106,16 @@ const loadDashboardStats = async () => {
       ])
       
       // 设置性能数据 (使用CPU使用率作为示例)
-      if (deviceHealthRes && deviceHealthRes.cpu_usage && deviceHealthRes.cpu_usage.length > 0) {
+      if (deviceHealthRes && deviceHealthRes.cpu_usage && Array.isArray(deviceHealthRes.cpu_usage) && deviceHealthRes.cpu_usage.length > 0) {
         const lastCpuData = deviceHealthRes.cpu_usage[deviceHealthRes.cpu_usage.length - 1]
-        dashboardData.value.stats.cpuUsage = lastCpuData.value !== undefined ? lastCpuData.value : 0
-      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.cpu_usage && deviceHealthRes.data.cpu_usage.length > 0) {
+        dashboardData.value.stats.cpuUsage = typeof lastCpuData.value !== 'undefined' ? lastCpuData.value : 0
+      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.cpu_usage && Array.isArray(deviceHealthRes.data.cpu_usage) && deviceHealthRes.data.cpu_usage.length > 0) {
         // 如果响应包装在data字段中
         const lastCpuData = deviceHealthRes.data.cpu_usage[deviceHealthRes.data.cpu_usage.length - 1]
-        dashboardData.value.stats.cpuUsage = lastCpuData.value !== undefined ? lastCpuData.value : 0
+        dashboardData.value.stats.cpuUsage = typeof lastCpuData.value !== 'undefined' ? lastCpuData.value : 0
       } else {
         console.warn('设备健康数据API未返回预期数据结构')
+        dashboardData.value.stats.cpuUsage = 0
       }
 
       // 准备状态趋势图表数据
@@ -1058,36 +1135,40 @@ const loadDashboardStats = async () => {
       };
 
       // 处理设备健康数据 - CPU和内存使用率
-      if (deviceHealthRes && deviceHealthRes.cpu_usage) {
+      if (deviceHealthRes && deviceHealthRes.cpu_usage && Array.isArray(deviceHealthRes.cpu_usage)) {
         dashboardData.value.performanceData.cpu = deviceHealthRes.cpu_usage;
-      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.cpu_usage) {
+      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.cpu_usage && Array.isArray(deviceHealthRes.data.cpu_usage)) {
         dashboardData.value.performanceData.cpu = deviceHealthRes.data.cpu_usage;
       }
 
-      if (deviceHealthRes && deviceHealthRes.memory_usage) {
+      if (deviceHealthRes && deviceHealthRes.memory_usage && Array.isArray(deviceHealthRes.memory_usage)) {
         dashboardData.value.performanceData.memory = deviceHealthRes.memory_usage;
-      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.memory_usage) {
+      } else if (deviceHealthRes && deviceHealthRes.data && deviceHealthRes.data.memory_usage && Array.isArray(deviceHealthRes.data.memory_usage)) {
         dashboardData.value.performanceData.memory = deviceHealthRes.data.memory_usage;
       }
 
       // 处理流量监控数据 - 入站和出站流量
-      if (trafficMonitoringRes && trafficMonitoringRes.inbound_traffic) {
+      if (trafficMonitoringRes && trafficMonitoringRes.inbound_traffic && Array.isArray(trafficMonitoringRes.inbound_traffic)) {
         // 转换流量数据格式以匹配图表期望的格式
-        dashboardData.value.performanceData.bandwidth = trafficMonitoringRes.inbound_traffic.map((item, index) => {
-          const outItem = trafficMonitoringRes.outbound_traffic[index] || { value: 0 };
+        const inboundTraffic = trafficMonitoringRes.inbound_traffic;
+        const outboundTraffic = Array.isArray(trafficMonitoringRes.outbound_traffic) ? trafficMonitoringRes.outbound_traffic : [];
+        dashboardData.value.performanceData.bandwidth = inboundTraffic.map((item, index) => {
+          const outItem = outboundTraffic[index] || { value: 0 };
           return {
-            time: item.time,
-            in: item.value,
-            out: outItem.value
+            time: item.time || '',
+            in: typeof item.value !== 'undefined' ? item.value : 0,
+            out: typeof outItem.value !== 'undefined' ? outItem.value : 0
           };
         });
-      } else if (trafficMonitoringRes && trafficMonitoringRes.data && trafficMonitoringRes.data.inbound_traffic) {
-        dashboardData.value.performanceData.bandwidth = trafficMonitoringRes.data.inbound_traffic.map((item, index) => {
-          const outItem = trafficMonitoringRes.data.outbound_traffic[index] || { value: 0 };
+      } else if (trafficMonitoringRes && trafficMonitoringRes.data && trafficMonitoringRes.data.inbound_traffic && Array.isArray(trafficMonitoringRes.data.inbound_traffic)) {
+        const inboundTraffic = trafficMonitoringRes.data.inbound_traffic;
+        const outboundTraffic = Array.isArray(trafficMonitoringRes.data.outbound_traffic) ? trafficMonitoringRes.data.outbound_traffic : [];
+        dashboardData.value.performanceData.bandwidth = inboundTraffic.map((item, index) => {
+          const outItem = outboundTraffic[index] || { value: 0 };
           return {
-            time: item.time,
-            in: item.value,
-            out: outItem.value
+            time: item.time || '',
+            in: typeof item.value !== 'undefined' ? item.value : 0,
+            out: typeof outItem.value !== 'undefined' ? outItem.value : 0
           };
         });
       }

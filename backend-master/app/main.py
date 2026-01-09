@@ -12,9 +12,12 @@ from app.services.cors_config import ALLOWED_ORIGINS, ALLOWED_METHODS, ALLOWED_H
 from app.services.config import REDIS_URL
 from app.scheduler import TaskScheduler
 from app.services.device_status_checker import device_status_checker  # 导入设备状态检查器
+from app.services.exception_handler import ExceptionHandler  # 导入异常处理中间件
+from app.services.health_check import HealthCheckService  # 导入健康检查服务
 import os
 import json
 from typing import Any
+from pathlib import Path
 from fastapi.responses import JSONResponse
 import logging
 
@@ -49,19 +52,28 @@ app = FastAPI(
     default_response_class=UTF8JSONResponse
 )
 
+# 添加异常处理中间件
+app.middleware("http")(ExceptionHandler.handle_exception)
+
 # 添加CORS中间件
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=ALLOWED_ORIGINS,  # 修正变量名
     allow_credentials=True,
     allow_methods=ALLOWED_METHODS,
     allow_headers=ALLOWED_HEADERS,
 )
 
 # 挂载静态文件目录
-static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "frontend", "dist")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+try:
+    frontend_dist_dir = Path(__file__).parent.parent / "frontend" / "dist"
+    if frontend_dist_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(frontend_dist_dir.resolve())), name="static")
+        logger.info(f"静态文件目录已挂载: {frontend_dist_dir.resolve()}")
+    else:
+        logger.warning(f"前端构建目录不存在: {frontend_dist_dir}, 跳过静态文件挂载")
+except Exception as e:
+    logger.error(f"挂载静态文件目录失败: {e}")
 
 # 注册API路由
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["认证"])
@@ -105,7 +117,12 @@ async def get_open_api_endpoint():
 
 @app.get("/")
 async def root():
-    return {"message": "欢迎使用网络设备管理系统API"}
+    return {"message": "NetMgr API is running"}
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点，用于系统监控"""
+    return HealthCheckService.get_system_health()
 
 # 应用启动事件处理器
 @app.on_event("startup")

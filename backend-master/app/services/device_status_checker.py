@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import os  # 添加缺失的os模块导入
 from typing import Dict, List
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -12,7 +13,7 @@ import platform
 import threading
 from datetime import datetime
 from app.adapters.snmp import SNMPAdapter
-from app.services.adapter_factory import AdapterFactory  # 导入AdapterFactory
+from app.services.adapter_manager import AdapterManager  # 导入AdapterManager替代AdapterFactory
 from app.services.encryption import decrypt_device_password
 import concurrent.futures
 
@@ -33,6 +34,7 @@ class DeviceStatusChecker:
         """检查主机连通性，使用多次尝试机制确保准确性"""
         import re
         max_retries = 3
+        
         for attempt in range(max_retries):
             try:
                 # 根据操作系统选择ping参数
@@ -46,7 +48,9 @@ class DeviceStatusChecker:
                         shell=True,  # 使用shell执行
                         capture_output=True,
                         text=True,
-                        timeout=2
+                        timeout=10,  # 增加超时时间
+                        # 设置环境变量确保输出使用UTF-8编码
+                        env={**os.environ, 'PYTHONIOENCODING': 'utf-8'}
                     )
                 else:
                     # 在Linux/macOS上，参数拆分成列表项
@@ -55,7 +59,7 @@ class DeviceStatusChecker:
                         command_parts,
                         capture_output=True,
                         text=True,
-                        timeout=2
+                        timeout=10  # 增加超时时间
                     )
 
                 # 检查ping是否成功
@@ -63,29 +67,35 @@ class DeviceStatusChecker:
                 if platform.system().lower() == 'windows':
                     # Windows的ping命令输出中包含"来自 xxx.xxx.xxx.xxx 的回复"表示成功
                     is_reachable = "来自" in result.stdout and "的回复" in result.stdout
+                    # 也支持英文版Windows
+                    if not is_reachable:
+                        is_reachable = "Reply from" in result.stdout
                 else:
                     # Linux/macOS使用返回码判断
                     is_reachable = result.returncode == 0
-                
+
                 # 尝试提取响应时间
                 response_time = None
                 if is_reachable:
                     # 匹配Windows和Linux/macOS的ping输出格式
                     if platform.system().lower() == 'windows':
                         # Windows格式: "时间<1ms" 或 "时间=32ms"
-                        match = re.search(r'时间[<|=](\d+)ms', result.stdout)
+                        match = re.search(r'时间[<|=](\d+\.?\d*)ms', result.stdout)
+                        # 英文版Windows格式: "time<1ms" or "time=32ms"
+                        if not match:
+                            match = re.search(r'time[<|=](\d+\.?\d*)ms', result.stdout)
                     else:
-                        # Linux/macOS格式: "time=32 ms"
-                        match = re.search(r'time=(\d+)\s+ms', result.stdout)
+                        # Linux/macOS格式: "time=32 ms" or "time=32.456 ms"
+                        match = re.search(r'time=(\d+\.?\d*)\s*ms', result.stdout)
 
                     if match:
                         response_time = float(match.group(1))
 
-                    return {
-                        "ip": ip,
-                        "is_reachable": True,
-                        "response_time": response_time
-                    }
+                return {
+                    "ip": ip,
+                    "is_reachable": is_reachable,
+                    "response_time": response_time
+                }
             except subprocess.TimeoutExpired:
                 logger.debug(f"尝试 {attempt + 1}/{max_retries} ping {ip} 超时")
                 if attempt == max_retries - 1:  # 如果是最后一次尝试
@@ -96,7 +106,11 @@ class DeviceStatusChecker:
                     logger.warning(f"经过 {max_retries} 次尝试后，检查主机 {ip} 连通性失败")
 
         # 所有重试都失败，返回不可达
-        return {"ip": ip, "is_reachable": False, "response_time": None}
+        return {
+            "ip": ip,
+            "is_reachable": False,
+            "response_time": None
+        }
 
     def check_device_connectivity(self, device) -> Dict[str, any]:
         """检查设备连通性，使用多种方法确保准确性"""
@@ -160,7 +174,7 @@ class DeviceStatusChecker:
                         }
 
                 # 尝试创建适配器并连接
-                adapter = AdapterFactory.create_adapter(device.device_type or "ssh", device_info)
+                adapter = AdapterManager.get_adapter(device_info)
                 if not adapter:
                     logger.error(f"无法为设备 {device.name} 创建适配器，设备类型: {device.device_type}")
 

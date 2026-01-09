@@ -7,7 +7,7 @@ let isRedirecting = false
 // 创建 axios 实例
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL, // 使用环境变量
-  timeout: 15000 // 请求超时时间
+  timeout: 30000 // 请求超时时间设置为30秒
 })
 
 // 请求拦截器
@@ -19,9 +19,9 @@ service.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     
-    // 对于设备命令执行接口，增加超时时间到35秒，确保大于后端的30秒超时
-    if (config.url && config.url.includes('/execute')) {
-      config.timeout = 35000
+    // 对于设备命令执行接口，增加超时时间到60秒，确保大于后端的超时时间
+    if (config.url && (config.url.includes('/execute') || config.url.includes('/check-connectivity'))) {
+      config.timeout = 60000
     }
     
     return config

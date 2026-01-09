@@ -169,9 +169,6 @@ class SNMPTrapListener:
             device = db_session.query(Device).filter(Device.management_ip == source_ip).first()
             device_id = device.id if device else None
             
-            # 初始化简化详情
-            simple_details_json = None
-            
             # 解析SNMP Trap数据
             trap_parser = SNMPTrapParser()
             parsed_data = trap_parser.parse_trap(trap_data)
@@ -181,11 +178,15 @@ class SNMPTrapListener:
             # 添加简化信息
             simple_details_json = json.dumps(simple_alert, ensure_ascii=False)
             
+            # 确定告警类型和严重性
+            alert_type = self._determine_alert_type(trap_data)
+            severity = self._determine_severity(simple_alert)
+            
             # 创建告警对象
             alert = Alert(
                 device_id=device_id,
-                alert_type="snmp_trap",
-                severity=self._determine_severity(trap_data),
+                alert_type=alert_type,
+                severity=severity,
                 message=formatted_message,
                 simple_details=simple_details_json,
                 status="New"
@@ -233,28 +234,54 @@ class SNMPTrapListener:
             if db_session:
                 db_session.close()
 
-    def _determine_severity(self, trap_data: Dict[str, Any]) -> str:
+    def _determine_alert_type(self, trap_data: Dict[str, Any]) -> str:
         """
-        根据Trap数据确定告警严重性
+        根据Trap数据确定告警类型
         
         Args:
-            trap_data: 解析后的Trap数据
+            trap_data: 原始Trap数据
+            
+        Returns:
+            告警类型
+        """
+        # 检查告警类型标识OID
+        alert_oid = trap_data.get('1.3.6.1.6.3.1.1.4.1.0', '')
+        
+        # 根据OID确定告警类型
+        if '1.3.6.1.4.1.2011.5.25.123.2.6' in alert_oid:
+            return 'ip_conflict'
+        elif '1.3.6.1.6.3.1.1.5.3' in alert_oid:
+            return 'link_down'
+        elif '1.3.6.1.6.3.1.1.5.4' in alert_oid:
+            return 'link_up'
+        elif '1.3.6.1.6.3.1.1.5.5' in alert_oid:
+            return 'link_change'
+        elif '1.3.6.1.4.1.2011.5.25.207.2.2' in alert_oid:
+            return 'user_login'
+        elif '1.3.6.1.4.1.2011.5.25.207.2.4' in alert_oid:
+            return 'user_logout'
+        elif '1.3.6.1.4.1.4881.1.1.10.2.87.1.1.0.1' in alert_oid or '1.3.6.1.4.1.4881.1.1.10.2.87.1.2.0.3' in alert_oid:
+            return 'ruijie_user_login'
+        else:
+            return 'snmp_trap'
+
+    def _determine_severity(self, simple_alert: Dict[str, Any]) -> str:
+        """
+        根据解析后的简单告警信息确定告警严重性
+        
+        Args:
+            simple_alert: 解析后的简化告警信息
             
         Returns:
             告警严重性 (Critical, Major, Minor, Warning)
         """
-        # 检查是否有明显的严重性指示
-        trap_message = self._format_trap_message(trap_data).lower()
+        alert_type = simple_alert.get('alert_type', '').lower()
         
-        # 根据常见的Trap内容确定严重性
-        if any(keyword in trap_message for keyword in ["critical", "failure", "down", "error"]):
+        # 根据告警类型确定严重性
+        if '冲突' in alert_type or 'down' in alert_type.lower():
             return "Critical"
-        elif any(keyword in trap_message for keyword in ["warning", "warn"]):
-            return "Warning"
-        elif any(keyword in trap_message for keyword in ["major"]):
-            return "Major"
-        elif any(keyword in trap_message for keyword in ["minor"]):
-            return "Minor"
+        elif 'change' in alert_type.lower() or 'login' in alert_type.lower() or 'logout' in alert_type.lower() or 'ruijie_user_login' in alert_type.lower():
+            return "Info"
         else:
             # 默认返回Major
             return "Major"

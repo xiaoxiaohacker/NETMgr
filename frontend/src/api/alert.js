@@ -25,6 +25,18 @@ export function getAlerts(params) {
 }
 
 /**
+ * 确认告警
+ * @param {number} id 告警ID
+ * @returns {Promise}
+ */
+export function acknowledgeAlert(id) {
+  return request({
+    url: `/api/v1/alerts/${id}/acknowledge`,
+    method: 'put'
+  })
+}
+
+/**
  * 标记告警为已解决
  * @param {number} id 告警ID
  * @returns {Promise}

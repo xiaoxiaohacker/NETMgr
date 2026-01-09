@@ -36,7 +36,7 @@ class AlertService:
             simple_details_json = None
             
             # 解析SNMP Trap数据（如果是Trap类型）
-            if alert_data.get('type') == 'snmp_trap' or alert_data.get('alert_type') == 'snmp_trap':
+            if alert_data.get('type') == 'snmp_trap' or alert_data.get('alert_type') == 'snmp_trap' or alert_data.get('alert_type') == 'ruijie_user_login':
                 trap_details = alert_data.get('details', {})
                 if trap_details:
                     trap_parser = SNMPTrapParser()
@@ -44,11 +44,54 @@ class AlertService:
                     formatted_message = trap_parser.format_alert_message(parsed_data)
                     simple_alert = trap_parser.format_simple_alert(parsed_data)
                     
-                    # 更新告警数据
-                    alert_data['message'] = formatted_message
-                    alert_data['details'] = json.dumps(parsed_data, ensure_ascii=False)
-                    # 添加简化信息
-                    simple_details_json = json.dumps(simple_alert, ensure_ascii=False)
+                    # 创建告警数据
+                    alert_payload = {
+                        "type": "new_alert",
+                        "alert": {
+                            "id": simple_alert.get('alert_type', 'Unknown'),
+                            "device_id": alert_data.get('device_id', 'Unknown'),
+                            "timestamp": datetime.now().isoformat(),
+                            "message": formatted_message,
+                            "severity": parsed_data['severity'],
+                            "details": simple_alert
+                        }
+                    }
+                    
+                    # 发送到WebSocket
+                    await manager.broadcast(json.dumps(alert_payload))
+                    
+                    # 记录到数据库
+                    try:
+                        db_gen = get_db()
+                        db: Session = next(db_gen)
+                        
+                        # 根据设备IP查找设备ID
+                        device = None
+                        if 'ruijie_login_ip' in simple_alert and simple_alert['ruijie_login_ip']:
+                            device = db.query(Device).filter(Device.management_ip == simple_alert['ruijie_login_ip']).first()
+                        elif 'login_ip' in simple_alert and simple_alert['login_ip']:
+                            device = db.query(Device).filter(Device.management_ip == simple_alert['login_ip']).first()
+                        
+                        # 创建告警记录
+                        new_alert = Alert(
+                            device_id=device.id if device else None,
+                            alert_type=simple_alert.get('alert_type', 'snmp_trap'),
+                            severity=parsed_data['severity'],
+                            message=formatted_message,
+                            simple_details=json.dumps(simple_alert, ensure_ascii=False),
+                            status="New"
+                        )
+                        
+                        db.add(new_alert)
+                        db.commit()
+                        db.refresh(new_alert)
+                        
+                        logger.info(f"告警已保存到数据库，ID: {new_alert.id}")
+                    except Exception as e:
+                        logger.error(f"保存告警到数据库失败: {str(e)}")
+                    finally:
+                        if 'db' in locals():
+                            db.close()
             
             # 创建告警对象
             # 注意：这里需要确保传入的字段名与模型定义一致

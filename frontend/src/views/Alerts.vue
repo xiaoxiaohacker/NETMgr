@@ -78,12 +78,26 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="status" label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="getAlertStatusType(row.status)">
+              {{ getAlertStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <!-- 简化信息展示 -->
         <el-table-column label="告警详情" show-overflow-tooltip>
           <template #default="{ row }">
             <div v-if="row.simple_details && Object.keys(row.simple_details).length > 0">
               <div v-if="row.simple_details.alert_type">
                 <strong>{{ row.simple_details.alert_type }}</strong>
+              </div>
+              <div v-if="row.simple_details.h3c_interface_name || row.simple_details.h3c_hardware_addr">
+                接口: {{ row.simple_details.h3c_interface_name || 'N/A' }} | 
+                MAC: {{ row.simple_details.h3c_hardware_addr || 'N/A' }}
+              </div>
+              <div v-if="row.simple_details.h3c_attack_details">
+                攻击详情: {{ row.simple_details.h3c_attack_details }}
               </div>
               <div v-if="row.simple_details.conflict_ip || row.simple_details.conflict_mac">
                 冲突IP: {{ row.simple_details.conflict_ip || 'N/A' }} | 
@@ -98,14 +112,26 @@
               </div>
             </div>
             <div v-else>
-              {{ row.message }}
+              {{ row.message.substring(0, 100) }}{{ row.message.length > 100 ? '...' : '' }}
             </div>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button size="small" @click="acknowledgeAlert(row)">确认</el-button>
-            <el-button size="small" @click="resolveAlert(row)">解决</el-button>
+            <el-button 
+              size="small" 
+              :disabled="row.status === 'Resolved'"
+              @click="acknowledgeAlert(row)"
+            >
+              确认
+            </el-button>
+            <el-button 
+              size="small" 
+              :disabled="row.status === 'Resolved'"
+              @click="resolveAlert(row)"
+            >
+              解决
+            </el-button>
             <el-button size="small" @click="showDetail(row)">详情</el-button>
           </template>
         </el-table-column>
@@ -135,6 +161,10 @@
             <el-descriptions-item label="冲突接口">{{ selectedAlert.simple_details.conflict_interface }}</el-descriptions-item>
             <el-descriptions-item label="VLAN ID">{{ selectedAlert.simple_details.vlan_id }}</el-descriptions-item>
             <el-descriptions-item label="描述">{{ selectedAlert.simple_details.description }}</el-descriptions-item>
+            <el-descriptions-item label="H3C接口名称">{{ selectedAlert.simple_details.h3c_interface_name }}</el-descriptions-item>
+            <el-descriptions-item label="H3C硬件地址">{{ selectedAlert.simple_details.h3c_hardware_addr }}</el-descriptions-item>
+            <el-descriptions-item label="H3C攻击详情">{{ selectedAlert.simple_details.h3c_attack_details }}</el-descriptions-item>
+            <el-descriptions-item label="系统运行时间">{{ selectedAlert.simple_details.uptime }}</el-descriptions-item>
           </el-descriptions>
         </div>
         <div v-else>
@@ -147,7 +177,7 @@
 </template>
 
 <script>
-import { getAlerts } from '@/api/alert'
+import { getAlerts, acknowledgeAlert, resolveAlert } from '@/api/alert'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
@@ -249,38 +279,80 @@ export default {
       this.fetchAlerts()
     },
     
-    acknowledgeAlert(alert) {
-      ElMessageBox.confirm(
-        `确认要将告警 "${alert.message}" 标记为已确认吗？`,
-        '确认告警',
-        {
-          confirmButtonText: '确认',
-          cancelButtonText: '取消',
-          type: 'warning'
+    async acknowledgeAlert(alert) {
+      try {
+        await ElMessageBox.confirm(
+          `确认要将告警 "${alert.message.substring(0, 50)}${alert.message.length > 50 ? '...' : ''}" 标记为已确认吗？`,
+          '确认告警',
+          {
+            confirmButtonText: '确认',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        // 调用API确认告警
+        const response = await acknowledgeAlert(alert.id)
+        if (response && response.status) {
+          // 更新本地数据
+          const index = this.alerts.findIndex(a => a.id === alert.id)
+          if (index !== -1) {
+            this.alerts[index].status = response.status
+            this.alerts[index].acknowledged_at = response.acknowledged_at
+          }
+          
+          ElMessage.success('告警已确认')
+          // 刷新列表以更新统计信息
+          this.fetchAlerts()
+        } else {
+          ElMessage.error('确认告警失败')
         }
-      ).then(() => {
-        // 这里应该调用API确认告警
-        ElMessage.success('告警已确认')
-      }).catch(() => {
-        ElMessage.info('取消确认')
-      })
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('确认告警失败: ' + (error.message || '未知错误'))
+          console.error('确认告警失败:', error)
+        } else {
+          ElMessage.info('取消确认')
+        }
+      }
     },
     
-    resolveAlert(alert) {
-      ElMessageBox.confirm(
-        `确认要将告警 "${alert.message}" 标记为已解决吗？`,
-        '解决告警',
-        {
-          confirmButtonText: '确认',
-          cancelButtonText: '取消',
-          type: 'warning'
+    async resolveAlert(alert) {
+      try {
+        await ElMessageBox.confirm(
+          `确认要将告警 "${alert.message.substring(0, 50)}${alert.message.length > 50 ? '...' : ''}" 标记为已解决吗？`,
+          '解决告警',
+          {
+            confirmButtonText: '确认',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        // 调用API解决告警
+        const response = await resolveAlert(alert.id)
+        if (response && response.status) {
+          // 更新本地数据
+          const index = this.alerts.findIndex(a => a.id === alert.id)
+          if (index !== -1) {
+            this.alerts[index].status = response.status
+            this.alerts[index].resolved_at = response.resolved_at
+          }
+          
+          ElMessage.success('告警已解决')
+          // 刷新列表以更新统计信息
+          this.fetchAlerts()
+        } else {
+          ElMessage.error('解决告警失败')
         }
-      ).then(() => {
-        // 这里应该调用API解决告警
-        ElMessage.success('告警已解决')
-      }).catch(() => {
-        ElMessage.info('取消解决')
-      })
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('解决告警失败: ' + (error.message || '未知错误'))
+          console.error('解决告警失败:', error)
+        } else {
+          ElMessage.info('取消解决')
+        }
+      }
     },
     
     formatDate(dateString) {
@@ -306,6 +378,24 @@ export default {
         'Warning': '警告'
       }
       return severityMap[severity] || severity
+    },
+    
+    getAlertStatusType(status) {
+      const statusMap = {
+        'New': 'danger',
+        'Acknowledged': 'warning',
+        'Resolved': 'success'
+      }
+      return statusMap[status] || 'info'
+    },
+    
+    getAlertStatusLabel(status) {
+      const statusMap = {
+        'New': '新建',
+        'Acknowledged': '已确认',
+        'Resolved': '已解决'
+      }
+      return statusMap[status] || status
     },
     
     showDetail(alert) {

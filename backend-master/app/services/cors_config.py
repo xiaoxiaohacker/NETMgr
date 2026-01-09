@@ -16,11 +16,14 @@ import os
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",") if os.getenv("ALLOWED_ORIGINS") else ["*"]
 
 # 生产环境中应该明确指定允许的方法和头部
-ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "*").split(",") if os.getenv("ALLOWED_METHODS") else ["*"]
-ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "*").split(",") if os.getenv("ALLOWED_HEADERS") else ["*"]
+ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
+ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "X-Requested-With,content-type,Authorization,X-Client-Type").split(",")
 
-# 配置说明：
-# 1. 生产环境中应该将 ALLOWED_ORIGINS 设置为具体的前端域名
-#    可通过环境变量ALLOWED_ORIGINS设置，多个域名用逗号分隔
-# 2. 可以根据需要限制允许的HTTP方法和请求头
-# 3. 对于API-only的服务，可以考虑禁用CORS，只允许特定IP访问
+# 在生产环境中禁用通配符的警告
+if "*" in ALLOWED_ORIGINS:
+    import warnings
+    warnings.warn(
+        "警告: 使用通配符 '*' 作为CORS来源是不安全的，仅应在开发环境中使用。"
+        "在生产环境中，请设置ALLOWED_ORIGINS环境变量为具体的域名。",
+        UserWarning
+    )
