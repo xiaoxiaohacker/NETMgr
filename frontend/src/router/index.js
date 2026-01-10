@@ -101,4 +101,48 @@ const router = createRouter({
   routes
 })
 
+// 添加全局前置守卫
+router.beforeEach((to, from, next) => {
+  // 检查是否访问登录页面
+  if (to.path === '/login') {
+    // 如果访问登录页面，直接放行
+    next()
+  } else {
+    // 检查是否有有效的token
+    const token = localStorage.getItem('access_token')
+    
+    if (!token) {
+      // 没有token，重定向到登录页面
+      next('/login')
+    } else {
+      // 有token，检查是否有效
+      try {
+        // 解析JWT令牌以检查过期时间
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        const exp = payload.exp
+        const currentTime = Math.floor(Date.now() / 1000)
+        
+        if (exp > currentTime) {
+          // 令牌有效，允许访问
+          next()
+        } else {
+          // 令牌已过期，清除本地存储并重定向到登录页
+          localStorage.removeItem('access_token')
+          localStorage.removeItem('username')
+          localStorage.removeItem('userRole')
+          localStorage.removeItem('systemName')
+          next('/login')
+        }
+      } catch (e) {
+        // 令牌格式不正确，重定向到登录页面
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('username')
+        localStorage.removeItem('userRole')
+        localStorage.removeItem('systemName')
+        next('/login')
+      }
+    }
+  }
+})
+
 export default router

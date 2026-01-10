@@ -77,15 +77,13 @@ export function deleteConfigBackup(id) {
 }
 
 /**
- * 下载配置备份
+ * 获取配置备份内容
  * @param {Number} id 配置备份ID
  * @returns {Promise}
  */
 export function downloadConfigBackup(id) {
   return request({
-    // url: `/api/v1/backup-tasks/${id}/download`,
     url: `/api/v1/config-backup/${id}/download`,
-    method: 'get',
-    responseType: 'blob'
+    method: 'get'
   })
 }

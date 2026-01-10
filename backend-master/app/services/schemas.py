@@ -1,7 +1,13 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
+from enum import Enum
 from pydantic import BaseModel, Field, EmailStr
+
+# 定义用户角色枚举
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    OPERATOR = "operator"
 
 # 认证相关模型
 class Token(BaseModel):
@@ -13,6 +19,7 @@ class UserBase(BaseModel):
     username: str = Field(..., max_length=50)
     email: Optional[EmailStr] = Field(None, max_length=100)
     is_active: Optional[bool] = True
+    role: Optional[UserRole] = UserRole.OPERATOR  # 添加角色字段，默认为操作员
     created_at: Optional[datetime] = None
 
 class UserCreate(UserBase):

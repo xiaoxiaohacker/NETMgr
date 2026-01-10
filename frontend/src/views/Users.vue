@@ -4,13 +4,17 @@
       <div class="header-content">
         <h2>用户管理</h2>
         <div class="header-actions">
-          <el-button type="primary" @click="showAddUserDialog">添加用户</el-button>
+          <el-button v-if="isCurrentUserAdmin" type="primary" @click="showAddUserDialog">添加用户</el-button>
         </div>
       </div>
     </el-card>
 
     <el-card class="users-table">
-      <el-table :data="paginatedUsers" style="width: 100%" v-loading="loading">
+      <el-table 
+        :data="paginatedUsers" 
+        style="width: 100%" 
+        v-loading="loading"
+        empty-text="暂无数据">
         <el-table-column prop="id" label="ID" width="80" sortable></el-table-column>
         <el-table-column prop="username" label="用户名" width="200"></el-table-column>
         <el-table-column prop="email" label="邮箱" width="250"></el-table-column>
@@ -38,8 +42,8 @@
         </el-table-column>
         <el-table-column label="操作" width="200">
           <template #default="scope">
-            <el-button size="small" @click="showEditUserDialog(scope.row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="deleteUser(scope.row)">删除</el-button>
+            <el-button size="small" :disabled="!isCurrentUserAdmin" @click="showEditUserDialog(scope.row)">编辑</el-button>
+            <el-button size="small" type="danger" :disabled="!isCurrentUserAdmin || scope.row.username === 'admin'" @click="deleteUser(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -52,7 +56,7 @@
           :page-sizes="[10, 20, 50, 100]"
           :page-size="pageSize"
           layout="total, sizes, prev, pager, next, jumper"
-          :total="users.length">
+          :total="users && Array.isArray(users) ? users.length : 0">
         </el-pagination>
       </div>
     </el-card>
@@ -70,7 +74,6 @@
           <el-select v-model="currentUser.role" placeholder="请选择角色" style="width: 100%">
             <el-option label="管理员" value="admin"></el-option>
             <el-option label="操作员" value="operator"></el-option>
-            <el-option label="访客" value="guest"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="密码" prop="password" v-if="!isEditMode">
@@ -158,14 +161,26 @@ export default {
     dialogTitle() {
       return this.isEditMode ? '编辑用户' : '添加用户'
     },
+    isCurrentUserAdmin() {
+      // 从localStorage获取当前用户角色
+      const currentUserRole = localStorage.getItem('userRole');
+      return currentUserRole && currentUserRole.toUpperCase() === 'ADMIN';
+    },
     paginatedUsers() {
+      if (!this.users || !Array.isArray(this.users)) {
+        return [];
+      }
       const start = (this.currentPage - 1) * this.pageSize
       const end = start + this.pageSize
       return this.users.slice(start, end)
     }
   },
   async mounted() {
-    await this.loadUsers()
+    await this.loadUsers();
+    // 确保在数据加载后正确计算分页
+    this.$nextTick(() => {
+      this.handleCurrentChange(1);
+    });
   },
   methods: {
     formatDate(dateString) {
@@ -193,31 +208,24 @@ export default {
         case 'admin': return '管理员'
         case 'operator': return '操作员'
         case 'guest': return '访客'
-        default: return role
+        default: return role || '未知角色'
       }
     },
     async loadUsers() {
       try {
         this.loading = true
         const response = await getUsers()
-        // 为了前端显示，我们给每个用户添加role字段
-        this.users = response.map(user => ({
-          ...user,
-          role: this.getRoleFromUsername(user.username)
-        }))
+        console.log("API Response:", response)  // 调试信息
+        // 修复数据处理逻辑 - 直接使用响应数据，而不是response.data
+        this.users = Array.isArray(response) ? response : []
+        console.log("Users loaded:", this.users)  // 调试信息
       } catch (error) {
         console.error('获取用户列表失败:', error)
         this.$message.error('获取用户列表失败')
+        this.users = [] // 确保即使出错也有默认值
       } finally {
         this.loading = false
       }
-    },
-    getRoleFromUsername(username) {
-      // 这里可以根据用户名或其他逻辑来确定角色
-      // 简单示例：admin用户是管理员，其他为操作员
-      if (username === 'admin') return 'admin'
-      else if (username.includes('operator')) return 'operator'
-      else return 'guest'
     },
     showAddUserDialog() {
       this.isEditMode = false
@@ -238,7 +246,9 @@ export default {
     },
     async toggleUserStatus(user) {
       try {
-        const response = await toggleUserStatusAPI(user.id, user.is_active)
+        // 确保传递的是布尔值
+        const isActive = Boolean(user.is_active);
+        const response = await toggleUserStatusAPI(user.id, isActive)
         this.$message.success(`用户 ${user.username} 状态已更新`)
       } catch (error) {
         console.error('更新用户状态失败:', error)
@@ -267,25 +277,46 @@ export default {
       this.$refs.userForm.validate(async (valid) => {
         if (valid) {
           try {
+            // 验证当前用户是否有权限进行操作
+            if (!this.isCurrentUserAdmin && this.isEditMode) {
+              // 操作员不能编辑用户信息
+              this.$message.error('权限不足，只有管理员可以编辑用户信息');
+              return;
+            }
+            
             if (this.isEditMode) {
-              // 编辑用户
+              // 编辑用户 - 只有管理员可以编辑用户信息
+              if (!this.isCurrentUserAdmin) {
+                this.$message.error('权限不足，只有管理员可以编辑用户信息');
+                return;
+              }
+              
+              // 验证不能将操作员权限提升为管理员（除非当前用户是管理员）
               await updateUser(this.currentUser.id, {
                 username: this.currentUser.username,
                 email: this.currentUser.email,
+                role: this.isCurrentUserAdmin ? this.currentUser.role : undefined, // 只有管理员可以更新角色
                 password: this.currentUser.password || undefined  // 如果密码为空则不更新
               })
               this.$message.success('用户更新成功')
             } else {
-              // 添加用户 - 验证密码长度
+              // 添加用户 - 只有管理员可以添加用户
+              if (!this.isCurrentUserAdmin) {
+                this.$message.error('权限不足，只有管理员可以添加用户');
+                return;
+              }
+              
+              // 添加用户时验证密码长度
               if (!this.currentUser.password || this.currentUser.password.length < 10) {
-                this.$message.error('密码长度至少需要10位')
+                this.$message.error('密码长度至少需要10位');
                 return
               }
               
               await createUser({
                 username: this.currentUser.username,
                 email: this.currentUser.email,
-                password: this.currentUser.password
+                password: this.currentUser.password,
+                role: this.currentUser.role  // 管理员可以指定角色
               })
               this.$message.success('用户添加成功')
             }

@@ -53,7 +53,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login } from '@/api/auth'
+import { login, getCurrentUser } from '@/api/auth'
 
 // 表单引用
 const loginFormRef = ref()
@@ -98,7 +98,18 @@ const handleLogin = async () => {
         
         // 保存token到localStorage
         localStorage.setItem('access_token', response.access_token)
-        localStorage.setItem('access_token_username', loginForm.username)
+        localStorage.setItem('username', loginForm.username)
+        
+        // 获取当前用户详细信息
+        const userInfo = await getCurrentUser()
+        
+        // 保存用户角色信息到localStorage
+        if (userInfo.role) {
+          localStorage.setItem('userRole', userInfo.role)
+        } else {
+          // 如果后端没有返回角色，使用用户名作为参考（admin为管理员，其他为操作员）
+          localStorage.setItem('userRole', loginForm.username === 'admin' ? 'admin' : 'operator')
+        }
         
         // 如果选择了"记住我"，保存用户名
         if (rememberMe.value) {

@@ -99,8 +99,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getCurrentUser } from '@/api/auth'
+import { updateUser } from '@/api/users'
 
 // 表单引用
 const profileForm = ref(null)
@@ -190,28 +191,83 @@ const saveProfile = async () => {
   }
   
   // 检查密码修改
-  if ((passwordForm.newPassword || passwordForm.confirmPassword || passwordForm.oldPassword)) {
-    if (!(passwordForm.newPassword && passwordForm.confirmPassword && passwordForm.oldPassword)) {
+  if (passwordForm.oldPassword || passwordForm.newPassword || passwordForm.confirmPassword) {
+    // 检查是否填写了所有密码字段
+    if (!(passwordForm.oldPassword && passwordForm.newPassword && passwordForm.confirmPassword)) {
       ElMessage.error('修改密码需要填写所有密码字段')
       return
     }
     
-    // 如果填写了新密码但两次输入不一致
-    if (passwordForm.newPassword && passwordForm.newPassword !== passwordForm.confirmPassword) {
+    // 验证新密码和确认密码是否一致
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
       ElMessage.error('两次输入的新密码不一致')
       return
     }
     
-    // 模拟密码修改操作（实际项目中需要调用后端API）
-    ElMessage({
-      message: '密码修改功能需要后端支持，当前为演示版本',
-      type: 'warning'
-    })
+    // 验证密码长度
+    if (passwordForm.newPassword.length < 6) {
+      ElMessage.error('新密码长度至少6位')
+      return
+    }
+    
+    // 确认是否真的要修改密码
+    try {
+      await ElMessageBox.confirm(
+        '确认要修改您的密码吗？',
+        '修改密码',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        }
+      )
+    } catch {
+      // 用户取消了操作
+      return
+    }
+    
+    // 调用API更新用户信息，包括密码
+    try {
+      const userData = {
+        username: userInfo.username,
+        email: userInfo.email,
+        is_active: userInfo.is_active,
+        password: passwordForm.newPassword // 将新密码作为password字段发送
+      }
+      
+      const response = await updateUser(userInfo.id, userData)
+      ElMessage.success('密码修改成功！')
+      
+      // 重置密码表单
+      resetPasswordForm()
+    } catch (error) {
+      console.error('修改密码失败:', error)
+      ElMessage.error('密码修改失败: ' + (error.response?.data?.detail || error.message))
+    }
+  } else {
+    // 仅更新个人信息（邮箱等）
+    try {
+      const userData = {
+        username: userInfo.username,
+        email: userInfo.email,
+        is_active: userInfo.is_active,
+        password: "" // 不修改密码时，不需要发送密码
+      }
+      
+      // 如果没有修改密码，我们只发送邮箱更新请求
+      const response = await updateUser(userInfo.id, {
+        username: userInfo.username,
+        email: userInfo.email,
+        is_active: userInfo.is_active,
+        password: undefined // 不包含password字段，这样就不会更新密码
+      })
+      
+      ElMessage.success('个人信息保存成功')
+    } catch (error) {
+      console.error('保存个人信息失败:', error)
+      ElMessage.error('保存个人信息失败: ' + (error.response?.data?.detail || error.message))
+    }
   }
-  
-  // 模拟保存操作
-  ElMessage.success('个人信息保存成功')
-  resetPasswordForm()
 }
 
 // 重置表单

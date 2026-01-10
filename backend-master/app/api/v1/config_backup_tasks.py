@@ -113,7 +113,15 @@ def download_backup_task(
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        return content
+        # 返回原始内容，让前端处理换行
+        from fastapi.responses import Response
+        return Response(
+            content=content,
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": f"attachment; filename={backup.filename}"
+            }
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"下载备份失败: {str(e)}")
 

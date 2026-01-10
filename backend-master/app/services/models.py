@@ -4,6 +4,11 @@ from sqlalchemy.sql import func
 from app.services.db import Base
 from enum import Enum as PyEnum
 
+# 定义用户角色枚举
+class UserRole(PyEnum):
+    ADMIN = "admin"
+    OPERATOR = "operator"
+
 class User(Base):
     __tablename__ = "users"
 
@@ -12,6 +17,7 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)  # 增加长度以适应bcrypt哈希
     is_active = Column(Boolean, default=True)
+    role = Column(Enum(UserRole), default=UserRole.OPERATOR)  # 添加角色字段，默认为操作员
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系

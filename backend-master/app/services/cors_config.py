@@ -16,7 +16,7 @@ import os
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",") if os.getenv("ALLOWED_ORIGINS") else ["*"]
 
 # 生产环境中应该明确指定允许的方法和头部
-ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS").split(",")
+ALLOWED_METHODS = os.getenv("ALLOWED_METHODS", "GET,POST,PUT,DELETE,OPTIONS,PATCH").split(",")
 ALLOWED_HEADERS = os.getenv("ALLOWED_HEADERS", "X-Requested-With,content-type,Authorization,X-Client-Type").split(",")
 
 # 在生产环境中禁用通配符的警告

@@ -103,21 +103,6 @@ const fetchBackups = async () => {
       }
     })
   } catch (error) {
-    // 特别处理认证错误
-    if (error.response && error.response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      // 清除本地存储并跳转到登录页
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      if (window.location.hash !== '#/login') {
-        window.location.hash = '#/login'
-      }
-      backups.value = []
-      total.value = 0
-      loading.value = false
-      return
-    }
-    
     console.error('获取备份列表失败:', error)
     ElMessage.error('获取备份列表失败: ' + (error.message || '未知错误'))
     backups.value = []
@@ -145,16 +130,40 @@ const handleCurrentChange = (val) => {
 }
 
 // 下载备份文件
-const handleDownload = async (backup) => {
+const handleDownload = async (backup, sanitize = false) => {
   try {
     const response = await downloadConfigBackup(backup.id)
     
+    // 确保内容是字符串
+    let content = response
+    if (content instanceof Blob) {
+      // 如果是Blob类型，需要转换为文本
+      content = await content.text()
+    } else if (typeof content !== 'string') {
+      content = String(content)
+    }
+    
+    let filename = backup.filename
+    
+    // 如果需要脱敏，处理配置内容
+    if (sanitize) {
+      content = sanitizeConfig(content)
+      // 修改文件名为脱敏版本
+      const parts = backup.filename.split('.')
+      if (parts.length > 1) {
+        const ext = parts.pop()
+        filename = `${parts.join('.')}_sanitized.${ext}`
+      } else {
+        filename = `${backup.filename}_sanitized`
+      }
+    }
+    
     // 创建下载链接
-    const blob = new Blob([response])
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', backup.filename)
+    link.setAttribute('download', filename)
     document.body.appendChild(link)
     link.click()
     
@@ -162,20 +171,8 @@ const handleDownload = async (backup) => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     
-    ElMessage.success('下载成功')
+    ElMessage.success(sanitize ? '脱敏配置下载成功' : '配置下载成功')
   } catch (error) {
-    // 特别处理认证错误
-    if (error.response && error.response.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
-      // 清除本地存储并跳转到登录页
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      if (window.location.hash !== '#/login') {
-        window.location.hash = '#/login'
-      }
-      return
-    }
-    
     ElMessage.error('下载失败: ' + (error.message || '未知错误'))
   }
 }
@@ -196,18 +193,6 @@ const handleDelete = (backup) => {
       ElMessage.success('删除成功')
       fetchBackups() // 刷新列表
     } catch (error) {
-      // 特别处理认证错误
-      if (error.response && error.response.status === 401) {
-        ElMessage.error('登录已过期，请重新登录')
-        // 清除本地存储并跳转到登录页
-        localStorage.removeItem('token')
-        localStorage.removeItem('username')
-        if (window.location.hash !== '#/login') {
-          window.location.hash = '#/login'
-        }
-        return
-      }
-      
       ElMessage.error('删除失败: ' + (error.message || '未知错误'))
     }
   }).catch(() => {

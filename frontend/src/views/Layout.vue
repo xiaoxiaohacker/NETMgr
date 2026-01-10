@@ -50,7 +50,7 @@
         </el-menu-item>
         <el-menu-item index="/settings">
           <el-icon>
-            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="m18.42 14.5l-.37-.16a5.99 5.99 0 0 0 .74-2.34c0-.84-.16-1.64-.46-2.38l.37-.16a2.3 2.3 0 0 0 1.35-2.01V6c0-.62-.37-1.17-.92-1.39l-.55-.2a5.2 5.2 0 0 0-1.03-1.03l-.2-.55c-.22-.55-.77-.92-1.39-.92h-1.5c-.77 0-1.48.38-1.92 1.01l-.3.46c-.42.63-1.01 1.13-1.7 1.46l-.56.27c-.5.24-1.07.38-1.65.38s-1.15-.14-1.65-.38l-.56-.27c-.69-.33-1.28-.83-1.7-1.46l-.3-.46C6.01 3.38 5.3 3 4.53 3H3c-.62 0-1.17.37-1.39.92l-.2.55c-.34.59-.58 1.24-.7 1.93l-.07.5c-.28.09-.56.22-.8.39c-.55.37-.88.99-.88 1.66v1.5c0 .77.38 1.48 1.01 1.92l.46.3c.63.42 1.13 1.01 1.46 1.7l.27.56c.24.5.38 1.07.38 1.65s-.14 1.15-.38 1.65l-.27.56c-.33.69-.83 1.28-1.46 1.7l-.46.3C3.38 17.99 3 18.7 3 19.47v1.5c0 .62.37 1.17.92 1.39l.55.2c.34.19.7.33 1.07.42l.43.1c.48.5.2 1.3-.42 1.3H3c-.55 0-1-.45-1-1s.45-1 1-1h.53c.28 0 .55-.11.76-.31c.2-.2.31-.47.31-.76V19.5c0-.77-.38-1.48-1.01-1.92l-.46-.3c-.63-.42-1.13-1.01-1.46-1.7l-.27-.56c-.24-.5-.38-1.07-.38-1.65s.14-1.15.38-1.65l.27-.56c.33-.69.83-1.28 1.46-1.7l.46-.3C5.02 9.01 5.4 8.3 5.4 7.53v-1.5c0-.29-.11-.56-.31-.76c-.2-.2-.47-.31-.76-.31H3c-.55 0-1-.45-1-1s.45-1 1-1h.53c.28 0 .55.11.76.31c.2.2.31.47.31.76v1.5c0 .77.38 1.48 1.01 1.92l.46.3c.63.42 1.13 1.01 1.46 1.7l.27.56c.24.5.38 1.07.38 1.65s-.14 1.15-.38 1.65l-.27.56c-.33.69-.83 1.28-1.46 1.7l-.46.3c-.63.44-1.01 1.15-1.01 1.92v1.5c0 .29.11.56.31.76c.2.2.47.31.76.31H6c.62 0 .9-.8.42-1.3l-.43-.1c-.37-.09-.73-.23-1.07-.42l-.55-.2c-.55-.22-.92-.77-.92-1.39v-1.5c0-.67.33-1.29.88-1.66c.24-.17.52-.3.8-.39l.07-.5c.12-.69.36-1.34.7-1.93l.2-.55c.22-.55.77-.92 1.39-.92h1.5c.58 0 1.15.14 1.65.38l.56.27c.69.33 1.28.83 1.7 1.46l.3.46c.44.63 1.15 1.01 1.92 1.01h1.5c.62 0 1.17-.37 1.39-.92l.2-.55c.34-.59.58-1.24.7-1.93l.07-.5c.28-.09.56-.22.8-.39c.55-.37.88-.99.88-1.66v-1.5c0-.67-.33-1.29-.88-1.66c-.24-.17-.52-.3-.8-.39z"/><path fill="currentColor" d="M12 15c1.66 0 3-1.34 3-3s-1.34-3-3-3s-3 1.34-3 3s1.34 3 3 3zm0-4c.55 0 1 .45 1 1s-.45 1-1 1s-1-.45-1-1s.45-1 1-1z"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24"><path fill="currentColor" d="m18.42 14.5l-.37-.16a5.99 5.99 0 0 0 .74-2.34c0-.84-.16-1.64-.46-2.38l.37-.16a2.3 2.3 0 0 0 1.35-2.01V6c0-.62-.37-1.17-.92-1.39l-.55-.2a5.2 5.2 0 0 0-1.03-1.03l-.2-.55c-.22-.55-.77-.92-1.39-.92h-1.5c-.77 0-1.48.38-1.92 1.01l-.3.46c-.42.63-1.01 1.13-1.7 1.46l-.56.27c-.5.24-1.07.38-1.65.38s-1.15-.14-1.65-.38l-.56-.27c-.69-.33-1.28-.83-1.7-1.46l-.3-.46C6.01 3.38 5.3 3 4.53 3H3c-.62 0-1.17.37-1.39.92l-.2.55c-.34.59-.58 1.24-.7 1.93l-.07.5c-.28.09-.56.22-.8.39c-.55.37-.88.99-.88 1.66v1.5c0 .77.38 1.48 1.01 1.92l.46.3c.63.42 1.13 1.01 1.46 1.7l.27.56c.24.5.38 1.07.38 1.65s-.14 1.15-.38 1.65l-.27.56c-.33.69-.83 1.28-1.46 1.7l.46-.3C3.38 17.99 3 18.7 3 19.47v1.5c0 .62.37 1.17.92 1.39l.55.2c.34.19.7.33 1.07.42l.43.1c.48.5.2 1.3-.42 1.3H3c-.55 0-1-.45-1-1s.45-1 1-1h.53c.28 0 .55-.11.76-.31c.2-.2.31-.47.31-.76V19.5c0-.77-.38-1.48-1.01-1.92l-.46-.3c-.63-.42-1.13-1.01-1.46-1.7l-.27-.56c-.24-.5-.38-1.07-.38-1.65s.14-1.15.38-1.65l.27-.56c.33-.69.83-1.28 1.46-1.7l.46-.3C5.02 9.01 5.4 8.3 5.4 7.53v-1.5c0-.29-.11-.56-.31-.76c-.2-.2-.47-.31-.76-.31H3c-.55 0-1-.45-1-1s.45-1 1-1h.53c.28 0 .55.11.76.31c.2.2.31.47.31.76v1.5c0 .77.38 1.48 1.01 1.92l.46.3c.63.42 1.13 1.01 1.46 1.7l.27.56c.24.5.38 1.07.38 1.65s-.14 1.15-.38 1.65l-.27.56c-.33.69-.83 1.28-1.46 1.7l-.46.3c-.63.44-1.01 1.15-1.01 1.92v1.5c0 .29.11.56.31.76c.2.2.47.31.76.31H6c.62 0 .9-.8.42-1.3l-.43-.1c-.37-.09-.73-.23-1.07-.42l-.55-.2c-.55-.22-.92-.77-.92-1.39v-1.5c0-.67.33-1.29.88-1.66c.24-.17.52-.3.8-.39l.07-.5c.12-.69.36-1.34.7-1.93l.2-.55c.22-.55.77-.92 1.39-.92h1.5c.58 0 1.15.14 1.65.38l.56.27c.69.33 1.28.83 1.7 1.46l.3.46c.44.63 1.15 1.01 1.92 1.01h1.5c.62 0 1.17-.37 1.39-.92l.2-.55c.34-.59.58-1.24.7-1.93l.07-.5c.28-.09.56-.22.8-.39c.55-.37.88-.99.88-1.66v-1.5c0-.67-.33-1.29-.88-1.66c-.24-.17-.52-.3-.8-.39z"/><path fill="currentColor" d="M12 15c1.66 0 3-1.34 3-3s-1.34-3-3-3s-3 1.34-3 3s1.34 3 3 3zm0-4c.55 0 1 .45 1 1s-.45 1-1 1s-1-.45-1-1s.45-1 1-1z"/></svg>
           </el-icon>
           <span>系统设置</span>
         </el-menu-item>
@@ -68,7 +68,7 @@
           <el-dropdown @command="handleUserCommand">
             <span class="user-info">
               <el-avatar :size="30" icon="UserFilled" />
-              <span class="username">{{ username }}</span>
+              <span class="username">{{ username }} <el-tag size="small" type="info">{{ userRoleDisplay }}</el-tag></span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -147,8 +147,33 @@ const pageTitle = computed(() => {
   return titles[route.path] || '网络设备管理系统'
 })
 
-// 用户名
+// 用户名和角色
 const username = ref(localStorage.getItem('username') || '管理员')
+const userRole = ref('')
+const userRoleDisplay = computed(() => {
+  if (userRole.value === 'admin') {
+    return '管理员'
+  } else if (userRole.value === 'operator') {
+    return '操作员'
+  }
+  // 如果没有角色信息，默认显示为管理员
+  return '管理员'
+})
+
+// 在组件挂载时获取用户角色
+onMounted(() => {
+  // 立即检查一次令牌有效性
+  checkTokenValidity()
+  
+  // 从localStorage获取用户角色信息
+  const storedRole = localStorage.getItem('userRole')
+  if (storedRole) {
+    userRole.value = storedRole
+  }
+  
+  // 每分钟检查一次令牌有效性
+  tokenCheckInterval = setInterval(checkTokenValidity, 60000)
+})
 
 // 处理用户命令
 const handleUserCommand = (command) => {
@@ -171,9 +196,10 @@ const handleUserCommand = (command) => {
         // 即使后端调用失败，也要清除本地token
         console.error('登出接口调用失败:', error)
       } finally {
-        // 清除本地存储的token和用户名
+        // 清除本地存储的token、用户名和角色
         localStorage.removeItem('access_token')
         localStorage.removeItem('username')
+        localStorage.removeItem('userRole')
         localStorage.removeItem('systemName')
         
         // 跳转到登录页 - 使用router.push确保正确跳转
@@ -194,6 +220,17 @@ const handleUserCommand = (command) => {
 
 // 处理菜单选择
 const handleMenuSelect = (index) => {
+  // 检查令牌有效性，如果无效则不允许导航
+  const token = localStorage.getItem('access_token')
+  if (!token || !isTokenValid(token)) {
+    ElMessage.error('登录已过期，请重新登录')
+    router.push('/login').catch(err => {
+      console.error('路由跳转失败:', err)
+      window.location.href = '/#/login'
+    })
+    return
+  }
+
   console.log('Menu selected:', index)
   console.log('Current route:', route.path)
   
@@ -212,6 +249,24 @@ const handleMenuSelect = (index) => {
 // 监听路由变化，用于调试
 watch(route, (to, from) => {
   console.log('Route changed from', from.path, 'to', to.path)
+  
+  // 每次路由变化时也检查令牌有效性
+  const token = localStorage.getItem('access_token')
+  if (token && !isTokenValid(token)) {
+    // 令牌已过期，清除本地存储并跳转到登录页
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('username')
+    localStorage.removeItem('userRole')
+    localStorage.removeItem('systemName')
+    ElMessage.error('登录已过期，请重新登录')
+    
+    // 使用router跳转到登录页
+    router.push('/login').catch(err => {
+      console.error('路由跳转失败:', err)
+      // 如果router.push失败，则使用window.location
+      window.location.href = '/#/login'
+    })
+  }
 })
 
 // 检查令牌有效性
@@ -221,6 +276,7 @@ const checkTokenValidity = () => {
     // 令牌已过期，清除本地存储并跳转到登录页
     localStorage.removeItem('access_token')
     localStorage.removeItem('username')
+    localStorage.removeItem('userRole')
     localStorage.removeItem('systemName')
     ElMessage.error('登录已过期，请重新登录')
     
@@ -232,15 +288,6 @@ const checkTokenValidity = () => {
     })
   }
 }
-
-// 组件挂载时启动令牌检查
-onMounted(() => {
-  // 立即检查一次令牌有效性
-  checkTokenValidity()
-  
-  // 每分钟检查一次令牌有效性
-  tokenCheckInterval = setInterval(checkTokenValidity, 60000)
-})
 
 // 组件卸载前清理定时器
 onBeforeUnmount(() => {
