@@ -96,6 +96,7 @@ class TaskListResponse(BaseModel):
     page: int
     page_size: int
 
+#  获取任务列表
 @router.get("/", response_model=TaskListResponse)
 async def get_tasks(
     page: int = Query(1, ge=1),
@@ -181,7 +182,7 @@ async def get_tasks(
         # 记录错误详情
         print(f"获取任务列表时出错: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取任务列表失败: {str(e)}")
-
+# 创建新任务
 @router.post("/", response_model=TaskOut)
 def create_task(
     task_data: TaskCreate,

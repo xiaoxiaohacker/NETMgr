@@ -10,6 +10,7 @@ from app.services.config_backup_service import create_config_backup
 from app.services.schemas import ConfigCreate
 from app.services.adapter_manager import AdapterManager
 from app.tasks import backup_device_config_task, batch_process_devices, CELERY_AVAILABLE
+from app.services.encryption import decrypt_device_password  # 设备密码解密
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -310,14 +311,22 @@ class TaskScheduler:
                     task.logs += f"正在备份设备 {device.name} ({device.management_ip})...\n"
                     db.commit()
 
+                    # 解密设备密码
+                    decrypted_password = decrypt_device_password(device.password)
+                    decrypted_enable_password = (
+                        decrypt_device_password(device.enable_password) 
+                        if device.enable_password else None
+                    )
+
                     # 准备设备信息
                     device_info = {
                         "management_ip": device.management_ip,
+                        "vendor": device.vendor,
                         "username": device.username,
-                        "password": device.password,
+                        "password": decrypted_password,
                         "port": device.port,
                         "device_type": device.device_type,
-                        "enable_password": device.enable_password
+                        "enable_password": decrypted_enable_password
                     }
 
                     logger.info(f"准备备份设备 {device.name} ({device.management_ip}), 设备类型: {device.device_type}")
@@ -483,7 +492,7 @@ class TaskScheduler:
                     db.commit()
 
                 except Exception as e:
-                    failed_backups += 1
+                    failed_backups += 1                   
                     task.logs += f"  失败: 备份设备 {device.name} 时出错: {str(e)}\n"
                     logger.error(f"备份设备 {device.name} 时出错: {str(e)}", exc_info=True)
 
