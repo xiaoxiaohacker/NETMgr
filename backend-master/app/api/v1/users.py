@@ -11,6 +11,7 @@ from app.services.schemas import UserResponse, UserCreate
 from app.api.v1.auth import oauth2_scheme, decode_access_token
 from app.services.auth import hash_password
 from app.services.system_log import create_system_log
+from app.schemas.user import UserUpdate  # 导入新的 UserUpdate Schema
 
 # 配置日志记录器
 logger = logging.getLogger(__name__)
@@ -256,7 +257,7 @@ def create_user(
 @router.put("/{user_id}")
 def update_user(
     user_id: int,
-    user_update: UserCreate,  # 重用UserCreate模型，但所有字段都是可选的
+    user_update: UserUpdate,  # 使用新的 UserUpdate 模型
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
@@ -373,12 +374,13 @@ def update_user(
             db=db,
             level="INFO",
             module="USER",
-            message=f"用户 {current_user.username} 更新了用户: {db_user.username}",
+            message=f"用户 {db_user.username} (ID: {db_user.id}) 由 {current_user.username} 更新",
             user_id=current_user.id
         )
         return db_user
     except HTTPException:
-        # 重新抛出已定义的HTTP异常
+        # 记录HTTP异常
+        logger.warning(f"更新用户 {user_id} 时发生HTTP异常")
         raise
     except Exception as e:
         logger.error(f"更新用户过程中发生错误: {str(e)}")
@@ -386,9 +388,9 @@ def update_user(
             db=db,
             level="ERROR",
             module="USER",
-            message=f"更新用户过程中发生错误: {str(e)}"
+            message=f"更新用户过程中发生错误: {str(e)}",
+            user_id=current_user.id
         )
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="更新用户失败，请稍后重试"

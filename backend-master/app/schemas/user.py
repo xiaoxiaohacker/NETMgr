@@ -8,6 +8,11 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
 
+class UserUpdate(UserBase):
+    password: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+
 class UserLogin(BaseModel):
     username: str
     password: str
@@ -15,6 +20,7 @@ class UserLogin(BaseModel):
 class UserResponse(UserBase):
     id: int
     is_active: bool
+    role: str
 
     class Config:
         from_attributes = True  # ✅ 兼容 Pydantic V2
