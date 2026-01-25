@@ -25,6 +25,7 @@
             <el-button size="small" type="danger" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
+        <el-table-column prop="description" label="描述" ></el-table-column>
       </el-table>
       
       <div class="pagination-container">
