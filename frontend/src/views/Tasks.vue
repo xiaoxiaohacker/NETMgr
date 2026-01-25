@@ -13,7 +13,7 @@
     <el-card class="tasks-filter">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item label="任务状态">
-          <el-select v-model="filterForm.status" placeholder="请选择任务状态" clearable>
+          <el-select v-model="filterForm.status" placeholder="请选择任务状态" clearable  style="width: 200px">
             <el-option label="全部" value=""></el-option>
             <el-option label="等待中" value="pending"></el-option>
             <el-option label="进行中" value="running"></el-option>
@@ -23,10 +23,9 @@
           </el-select>
         </el-form-item>
         <el-form-item label="任务类型">
-          <el-select v-model="filterForm.type" placeholder="请选择任务类型" clearable>
+          <el-select v-model="filterForm.type" placeholder="请选择任务类型" clearable  style="width: 200px">
             <el-option label="配置备份" value="config_backup"></el-option>
             <el-option label="设备巡检" value="device_inspection"></el-option>
-            <el-option label="固件升级" value="firmware_upgrade"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -39,7 +38,7 @@
     <el-card class="tasks-table">
       <el-table :data="paginatedTasks" style="width: 100%" v-loading="loading">
         <el-table-column prop="id" label="任务ID" width="80"></el-table-column>
-        <el-table-column prop="name" label="任务名称" show-overflow-tooltip></el-table-column>
+        <el-table-column prop="name" label="任务名称" show-overflow-tooltip ></el-table-column>
         <el-table-column prop="task_type" label="任务类型" width="120">
           <template #default="scope">
             <el-tag :type="getTypeTagType(scope.row.task_type)">
@@ -121,7 +120,6 @@
           <el-select v-model="newTask.task_type" placeholder="请选择任务类型" style="width: 100%" @change="onTaskTypeChange">
             <el-option label="配置备份" value="config_backup"></el-option>
             <el-option label="设备巡检" value="device_inspection"></el-option>
-            <el-option label="固件升级" value="firmware_upgrade"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="目标设备" prop="target_device_ids">
@@ -348,11 +346,6 @@ export default {
       switch (type) {
         case 'config_backup': return 'primary'
         case 'device_inspection': return 'success'
-        case 'firmware_upgrade': return 'warning'
-        case 'config_restore': return 'info'
-        case 'security_audit': return 'danger'
-        case 'performance_monitoring': return 'warning'
-        case 'network_optimization': return 'primary'
         default: return ''
       }
     },
@@ -360,7 +353,6 @@ export default {
       switch (type) {
         case 'config_backup': return '配置备份'
         case 'device_inspection': return '设备巡检'
-        case 'firmware_upgrade': return '固件升级'
         default: return type
       }
     },
