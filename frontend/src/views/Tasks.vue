@@ -38,7 +38,7 @@
     <el-card class="tasks-table">
       <el-table :data="paginatedTasks" style="width: 100%" v-loading="loading">
         <el-table-column prop="id" label="任务ID" width="80"></el-table-column>
-        <el-table-column prop="name" label="任务名称" show-overflow-tooltip ></el-table-column>
+        <el-table-column prop="name" label="任务名称" show-overflow-tooltip></el-table-column>
         <el-table-column prop="task_type" label="任务类型" width="120">
           <template #default="scope">
             <el-tag :type="getTypeTagType(scope.row.task_type)">
@@ -95,6 +95,7 @@
             </el-button>
           </template>
         </el-table-column>
+        <el-table-column prop="description" label="任务描述" show-overflow-tooltip ></el-table-column>
       </el-table>
       
       <div class="pagination-container">
