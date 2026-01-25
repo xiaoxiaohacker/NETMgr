@@ -651,35 +651,99 @@ class TaskScheduler:
                     task.logs += f"正在巡检设备 {device.name} ({device.management_ip})...\n"
                     db.commit()
 
-                    # 模拟设备巡检过程
-                    time.sleep(2)
-
-                    # 模拟巡检结果
-                    inspection_result = {
-                        "device_id": device.id,
-                        "status": "normal",
-                        "cpu_usage": f"{70 + i}%",
-                        "memory_usage": f"{60 + i}%",
-                        "uptime": f"{30 + i} days",
-                        "message": f"设备 {device.management_ip} 巡检完成"
+                    # 准备设备信息
+                    device_info = {
+                        "management_ip": device.management_ip,
+                        "username": device.username,
+                        "password": decrypt_device_password(device.password),  # 解密密码
+                        "port": device.port,
+                        "device_type": device.device_type,
+                        "enable_password": decrypt_device_password(device.enable_password) if device.enable_password else None,
+                        "vendor": device.vendor
                     }
 
-                    successful_inspections += 1
-                    task.logs += f"  成功: {inspection_result['message']} (CPU: {inspection_result['cpu_usage']}, 内存: {inspection_result['memory_usage']})\n"
-                    db.commit()
+                    # 使用AdapterManager执行设备巡检
+                    adapter = AdapterManager.get_adapter(device_info)
 
-                    # 记录系统日志
-                    try:
-                        from app.services.system_log import create_system_log
-                        create_system_log(
-                            db=db,
-                            level="INFO",
-                            module="INSPECTION",
-                            message=f"设备 {device.management_ip} 巡检成功 (CPU: {inspection_result['cpu_usage']}, 内存: {inspection_result['memory_usage']})",
-                            device_id=device.id
-                        )
-                    except Exception as log_error:
-                        logger.error(f"记录系统日志失败: {str(log_error)}")
+                    # 连接到设备并获取巡检信息
+                    if adapter.connect():
+                        # 尝试获取设备性能数据，如果适配器不支持此方法，则跳过
+                        performance_data = {}
+                        if hasattr(adapter, 'get_device_performance') and callable(getattr(adapter, 'get_device_performance')):
+                            try:
+                                performance_data = adapter.get_device_performance()
+                            except NotImplementedError:
+                                logger.warning(f"适配器 {type(adapter).__name__} 未实现 get_device_performance 方法")
+                                performance_data = {'cpu_usage': 'N/A', 'memory_usage': 'N/A'}
+                            except Exception as e:
+                                logger.error(f"获取性能数据时出错: {str(e)}")
+                                performance_data = {'cpu_usage': 'N/A', 'memory_usage': 'N/A'}
+                        else:
+                            logger.info(f"适配器 {type(adapter).__name__} 不支持 get_device_performance 方法")
+                            performance_data = {'cpu_usage': 'N/A', 'memory_usage': 'N/A'}
+
+                        # 尝试获取设备信息
+                        device_info_data = {}
+                        if hasattr(adapter, 'get_device_info') and callable(getattr(adapter, 'get_device_info')):
+                            try:
+                                device_info_data = adapter.get_device_info()
+                            except Exception as e:
+                                logger.error(f"获取设备信息时出错: {str(e)}")
+                                device_info_data = {'uptime': 'N/A'}
+                        else:
+                            logger.warning(f"适配器 {type(adapter).__name__} 不支持 get_device_info 方法")
+                            device_info_data = {'uptime': 'N/A'}
+
+                        # 断开连接
+                        adapter.disconnect()
+
+                        # 记录巡检结果
+                        cpu_usage = performance_data.get('cpu_usage', 'N/A')
+                        memory_usage = performance_data.get('memory_usage', 'N/A')
+                        uptime = device_info_data.get('uptime', 'N/A')
+
+                        inspection_result = {
+                            "device_id": device.id,
+                            "status": "normal",
+                            "cpu_usage": f"{cpu_usage}%" if cpu_usage != 'N/A' else 'N/A',
+                            "memory_usage": f"{memory_usage}%" if memory_usage != 'N/A' else 'N/A',
+                            "uptime": str(uptime),
+                            "message": f"设备 {device.management_ip} 巡检完成"
+                        }
+
+                        successful_inspections += 1
+                        task.logs += f"  成功: {inspection_result['message']} (CPU: {inspection_result['cpu_usage']}, 内存: {inspection_result['memory_usage']}, 运行时间: {uptime})\n"
+                        db.commit()
+
+                        # 记录系统日志
+                        try:
+                            from app.services.system_log import create_system_log
+                            create_system_log(
+                                db=db,
+                                level="INFO",
+                                module="INSPECTION",
+                                message=f"设备 {device.management_ip} 巡检成功 (CPU: {inspection_result['cpu_usage']}, 内存: {inspection_result['memory_usage']}, 运行时间: {uptime})",
+                                device_id=device.id
+                            )
+                        except Exception as log_error:
+                            logger.error(f"记录系统日志失败: {str(log_error)}")
+                    else:
+                        failed_inspections += 1
+                        task.logs += f"  失败: 无法连接到设备 {device.management_ip}\n"
+                        db.commit()
+
+                        # 记录系统日志
+                        try:
+                            from app.services.system_log import create_system_log
+                            create_system_log(
+                                db=db,
+                                level="ERROR",
+                                module="INSPECTION",
+                                message=f"设备 {device.management_ip} 连接失败",
+                                device_id=device.id
+                            )
+                        except Exception as log_error:
+                            logger.error(f"记录系统日志失败: {str(log_error)}")
 
                 except Exception as e:
                     failed_inspections += 1

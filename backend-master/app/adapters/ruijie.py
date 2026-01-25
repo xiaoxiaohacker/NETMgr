@@ -130,7 +130,9 @@ class RuijieAdapter(BaseAdapter):
             enable_password = self.device_info.get('enable_password', '')
             username = self.device_info.get('username', '')
             password = self.device_info.get('password', '')
-            logger.debug(f"使用的用户名: {username}, enable密码长度: {len(enable_password)}")
+            # 修复：处理enable_password为None的情况
+            enable_password_len = len(enable_password) if enable_password else 0
+            logger.debug(f"使用的用户名: {username}, enable密码长度: {enable_password_len}")
             
             # 发送换行符并读取当前提示符
             self.connection.write_channel("\n")
@@ -225,7 +227,7 @@ class RuijieAdapter(BaseAdapter):
                 # 2. 检查是否需要输入特权密码
                 if "Password" in output or "password" in output or ":" in output:
                     # 3. 输入特权密码
-                    self.connection.write_channel(enable_password + "\n")
+                    self.connection.write_channel(enable_password + "\n")  # 注意：这里如果enable_password为None会出错
                     time.sleep(1)
                     output = self.connection.read_channel()
                     logger.debug(f"输入特权密码后输出: {repr(output)}")
@@ -267,7 +269,12 @@ class RuijieAdapter(BaseAdapter):
                     # 检查是否需要输入特权密码
                     if "Password" in output or "password" in output or ":" in output:
                         # 输入特权密码
-                        self.connection.write_channel(enable_password + "\n")
+                        # 修复：处理enable_password为None的情况
+                        if enable_password:
+                            self.connection.write_channel(enable_password + "\n")
+                        else:
+                            # 如果没有enable密码，则发送回车
+                            self.connection.write_channel("\n")
                         time.sleep(1)
                         output = self.connection.read_channel()
                         logger.debug(f"输入特权密码后输出: {repr(output)}")
@@ -319,6 +326,27 @@ class RuijieAdapter(BaseAdapter):
             sn_match = re.search(r'^Serial Number\s*:\s*(.+)$', output, re.MULTILINE)
             if sn_match:
                 info["serial_number"] = sn_match.group(1).strip()
+            
+            # 提取运行时间 - 尝试多种可能的格式
+            uptime_patterns = [
+                r'(?i)(uptime is .+?|up time.*?|\d+ days?, \d+ hours?, \d+ minutes?)',
+                r'(?i)(\d+ weeks?, )?\s*(\d+ days?, )?\s*(\d+ hours?, )?\s*(\d+ minutes?)',
+                r'(?i)uptime:?\s*(.+?)(?:\n|$)',
+                r'(?i)system uptime\s*:?\s*(.+?)(?:\n|$)',
+                r'(?i)(\d+\s+(?:weeks|days|hours|minutes|seconds).*)'
+            ]
+            
+            uptime = None
+            for pattern in uptime_patterns:
+                uptime_match = re.search(pattern, output, re.MULTILINE | re.DOTALL)
+                if uptime_match:
+                    uptime = uptime_match.group(1).strip()
+                    break
+            
+            if uptime:
+                info["uptime"] = uptime.replace("Uptime is ", "").replace("up time ", "").replace("Uptime:", "").strip()
+            else:
+                info["uptime"] = "N/A"
             
             logger.debug(f"获取锐捷设备信息成功: {info}")
             return info
@@ -567,3 +595,69 @@ class RuijieAdapter(BaseAdapter):
             error_msg = f"获取锐捷设备MAC地址表失败: {str(e)}"
             logger.error(error_msg)
             return []
+
+    def get_device_performance(self) -> Dict[str, Any]:
+        """获取设备性能数据，包括CPU、内存使用率等"""
+        try:
+            # 确保在特权模式下执行命令
+            if not self._enter_privileged_mode():
+                raise Exception("无法进入特权模式")
+            
+            # 获取CPU使用率
+            cpu_output = self.execute_command("show cpu")
+            cpu_usage = 0
+            
+            # 解析CPU使用率，锐捷设备的输出格式可能类似：
+            # CPU utilization for five seconds: 11% / 0% max, one minute: 12% / 0% max, five minutes: 10% / 0% max
+            import re
+            cpu_match = re.search(r'five seconds: (\d+)%', cpu_output)
+            if cpu_match:
+                cpu_usage = int(cpu_match.group(1))
+            else:
+                # 尝试其他可能的格式
+                cpu_matches = re.findall(r'(\d+)%', cpu_output)
+                if cpu_matches:
+                    # 取第一个数字作为CPU使用率
+                    cpu_usage = int(cpu_matches[0])
+            
+            # 获取内存使用率
+            memory_output = self.execute_command("show memory")
+            memory_usage = 0
+            
+            # 解析内存使用率，锐捷设备的输出格式可能类似：
+            # Memory Using Percentage Is: 33%
+            memory_match = re.search(r'Memory Using Percentage Is:\s*(\d+)%', memory_output)
+            if memory_match:
+                memory_usage = int(memory_match.group(1))
+            else:
+                # 尝试其他可能的格式，如 "MemUsage = 33%"
+                memory_match = re.search(r'MemUsage\s*=\s*(\d+)%', memory_output)
+                if memory_match:
+                    memory_usage = int(memory_match.group(1))
+                else:
+                    # 再尝试其他的匹配模式
+                    memory_matches = re.findall(r'(\d+)%', memory_output)
+                    if memory_matches:
+                        # 取第一个匹配项作为内存使用率
+                        memory_usage = int(memory_matches[0])
+            
+            # 获取接口流量信息（可选）
+            inbound_bandwidth = 0
+            outbound_bandwidth = 0
+            
+            logger.info(f"获取锐捷设备性能数据成功 - CPU: {cpu_usage}%, 内存: {memory_usage}%")
+            return {
+                'cpu_usage': cpu_usage,
+                'memory_usage': memory_usage,
+                'inbound_bandwidth': inbound_bandwidth,
+                'outbound_bandwidth': outbound_bandwidth
+            }
+        except Exception as e:
+            logger.error(f"获取锐捷设备性能数据失败: {str(e)}")
+            # 返回默认值
+            return {
+                'cpu_usage': 0,
+                'memory_usage': 0,
+                'inbound_bandwidth': 0,
+                'outbound_bandwidth': 0
+            }

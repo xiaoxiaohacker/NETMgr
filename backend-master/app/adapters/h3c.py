@@ -91,10 +91,26 @@ class H3CAdapter(BaseAdapter):
             if sn_match:
                 info["serial_number"] = sn_match.group(1).strip()
             
-            # 提取运行时间
-            uptime_match = re.search(r'^.*?Uptime is (.+)$', output, re.MULTILINE)
-            if uptime_match:
-                info["uptime"] = uptime_match.group(1)
+            # 提取运行时间 - 尝试多种可能的格式
+            uptime_patterns = [
+                r'(?i)(uptime is .+?|up time.*?|\d+ days?, \d+ hours?, \d+ minutes?)',
+                r'(?i)(\d+ weeks?, )?\s*(\d+ days?, )?\s*(\d+ hours?, )?\s*(\d+ minutes?)',
+                r'(?i)uptime:?\s*(.+?)(?:\n|$)',
+                r'(?i)device uptime\s*:?\s*(.+?)(?:\n|$)',
+                r'(?i)(\d+\s+(?:weeks|days|hours|minutes|seconds).*)'
+            ]
+            
+            uptime = None
+            for pattern in uptime_patterns:
+                uptime_match = re.search(pattern, output, re.MULTILINE | re.DOTALL)
+                if uptime_match:
+                    uptime = uptime_match.group(1).strip()
+                    break
+            
+            if uptime:
+                info["uptime"] = uptime.replace("Uptime is ", "").replace("up time ", "").replace("Uptime:", "").strip()
+            else:
+                info["uptime"] = "N/A"
             
             logger.debug(f"获取华三设备信息成功: {info}")
             return info
@@ -239,3 +255,67 @@ class H3CAdapter(BaseAdapter):
             error_msg = f"执行华三设备命令失败: {str(e)}"
             print(error_msg)
             raise Exception(error_msg)
+
+    def get_device_performance(self) -> Dict[str, Any]:
+        """获取设备性能数据，包括CPU、内存使用率等"""
+        try:
+            # 确保连接状态
+            if not self._check_connection():
+                raise ConnectionError("设备连接失败")
+            
+            # 获取CPU使用率
+            cpu_output = self.execute_command("display cpu")
+            cpu_usage = 0
+            
+            # 解析CPU使用率，H3C设备的输出格式可能类似：
+            # 1 Slot's CPU utilization:
+            #    5-Second: 11%  // 5秒内的CPU利用率
+            import re
+            cpu_match = re.search(r'5-Second:\s*(\d+)%', cpu_output)
+            if cpu_match:
+                cpu_usage = int(cpu_match.group(1))
+            else:
+                # 尝试其他可能的格式
+                cpu_matches = re.findall(r'(\d+)%', cpu_output)
+                if cpu_matches:
+                    # 取第一个数字作为CPU使用率
+                    cpu_usage = int(cpu_matches[0])
+            
+            # 获取内存使用率
+            memory_output = self.execute_command("display memory")
+            memory_usage = 0
+            
+            # 解析内存使用率，H3C设备的输出格式可能类似：
+            # 1 Slot's Memory information:
+            #    Total(MB): 4096  Used(MB): 1358  Free(MB): 2738
+            #    Usage percentage: 33%
+            memory_match = re.search(r'Usage percentage:\s*(\d+)%', memory_output)
+            if memory_match:
+                memory_usage = int(memory_match.group(1))
+            else:
+                # 尝试其他可能的格式
+                memory_matches = re.findall(r'(\d+)%', memory_output)
+                if memory_matches:
+                    # 取第一个匹配项作为内存使用率
+                    memory_usage = int(memory_matches[0])
+            
+            # 获取接口流量信息（可选）
+            inbound_bandwidth = 0
+            outbound_bandwidth = 0
+            
+            logger.info(f"获取华三设备性能数据成功 - CPU: {cpu_usage}%, 内存: {memory_usage}%")
+            return {
+                'cpu_usage': cpu_usage,
+                'memory_usage': memory_usage,
+                'inbound_bandwidth': inbound_bandwidth,
+                'outbound_bandwidth': outbound_bandwidth
+            }
+        except Exception as e:
+            logger.error(f"获取华三设备性能数据失败: {str(e)}")
+            # 返回默认值
+            return {
+                'cpu_usage': 0,
+                'memory_usage': 0,
+                'inbound_bandwidth': 0,
+                'outbound_bandwidth': 0
+            }
