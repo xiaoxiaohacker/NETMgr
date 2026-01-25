@@ -1,7 +1,7 @@
 import threading
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from app.services.db import engine, get_db
@@ -18,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 # 创建数据库会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def get_local_time():
+    """获取本地时间（中国时区为UTC+8）"""
+    utc_now = datetime.utcnow()
+    # 中国时区为UTC+8
+    china_timezone_offset = timedelta(hours=8)
+    local_time = utc_now + china_timezone_offset
+    return local_time
 
 
 class TaskScheduler:
@@ -57,13 +66,14 @@ class TaskScheduler:
         db = SessionLocal()
         try:
             # 获取所有待处理且到达执行时间的任务
-            now = datetime.utcnow()
+            now = get_local_time()
+            # 修复：同时查询 PENDING 和 SCHEDULED 状态的任务
             pending_tasks = db.query(Task).filter(
-                Task.status == TaskStatus.PENDING,
+                Task.status.in_([TaskStatus.PENDING, TaskStatus.SCHEDULED]),
                 (Task.scheduled_time <= now) | (Task.scheduled_time.is_(None))
             ).all()
 
-            logger.info(f"检查到 {len(pending_tasks)} 个待处理任务")
+            logger.info(f"当前时间: {now.strftime('%Y-%m-%d %H:%M:%S')}  检查到 {len(pending_tasks)} 个待处理任务")
 
             for task in pending_tasks:
                 # 创建新的数据库会话来处理每个任务，避免会话污染
@@ -84,13 +94,13 @@ class TaskScheduler:
                 logger.warning(f"任务 {task_id} 不存在或已被处理")
                 return
 
-            # 检查任务是否仍处于PENDING状态（防止重复处理）
-            if task.status != TaskStatus.PENDING:
+            # 检查任务是否仍处于PENDING或SCHEDULED状态（防止重复处理）
+            if task.status not in [TaskStatus.PENDING, TaskStatus.SCHEDULED]:
                 logger.info(f"任务 {task_id} 状态已改变，当前状态: {task.status}")
                 return
 
             # 更新任务状态为排队中
-            now = datetime.utcnow()
+            now = get_local_time()
             old_status = task.status
             task.status = TaskStatus.QUEUED
             if not task.logs:
@@ -156,7 +166,7 @@ class TaskScheduler:
                         task_to_reset.result = None
                         if not task_to_reset.logs:
                             task_to_reset.logs = ""
-                        task_to_reset.logs += f"\n{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} - 收到手动执行请求，任务从 FAILED 状态重置为 PENDING\n"
+                        task_to_reset.logs += f"\n{get_local_time().strftime('%Y-%m-%d %H:%M:%S')} - 收到手动执行请求，任务从 FAILED 状态重置为 PENDING\n"
                         reset_db.commit()
                         logger.info(f"任务 {task_id} 已从 FAILED 状态重置为 PENDING")
                 finally:
@@ -207,10 +217,10 @@ class TaskScheduler:
                     task = db.query(Task).filter(Task.id == task_id).first()
                     if task and task.status in [TaskStatus.PENDING, TaskStatus.QUEUED, TaskStatus.RUNNING]:
                         task.status = TaskStatus.FAILED
-                        task.completed_at = datetime.utcnow()
+                        task.completed_at = get_local_time()
                         if not task.logs:
                             task.logs = ""
-                        task.logs += f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} - 任务执行异常: {str(e)}\n"
+                        task.logs += f"{get_local_time().strftime('%Y-%m-%d %H:%M:%S')} - 任务执行异常: {str(e)}\n"
                         db.commit()
                 except Exception as inner_e:
                     logger.error(f"更新任务 {task_id} 失败状态时出错: {inner_e}")
@@ -222,11 +232,14 @@ class TaskScheduler:
     def _execute_task(self, db, task):
         """执行单个任务"""
         try:
-            # 更新任务状态为运行中
+            # 更新任务状态为运行中，如果尚未设置开始时间则设置
             task.status = TaskStatus.RUNNING
-            task.started_at = datetime.utcnow()
+            if not task.started_at:
+                task.started_at = get_local_time()
             task.progress = 0
-            task.logs = ""  # 初始化日志
+            if not task.logs:
+                task.logs = ""
+            task.logs += f"{get_local_time().strftime('%Y-%m-%d %H:%M:%S')} - 任务开始执行\n"
             db.commit()
 
             # 根据任务类型执行相应的操作
@@ -239,9 +252,9 @@ class TaskScheduler:
             else:
                 # 未知任务类型
                 task.status = TaskStatus.FAILED
-                task.completed_at = datetime.utcnow()
+                task.completed_at = get_local_time()
                 task.result = "未知的任务类型"
-                task.logs += f"错误: 未知的任务类型 {task.task_type}\n"
+                task.logs += f"{get_local_time().strftime('%Y-%m-%d %H:%M:%S')} - 错误: 未知的任务类型 {task.task_type}\n"
                 db.commit()
 
                 # 记录系统日志
@@ -260,9 +273,10 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"执行任务 {task.id} 时出错: {e}", exc_info=True)
             task.status = TaskStatus.FAILED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = str(e)
-            task.logs += f"致命错误: {str(e)}\n"
+            task.logs += f"{get_local_time().strftime('%Y-%m-%d %H:%M:%S')} - 致命错误: {str(e)}\n"
             db.commit()
 
             # 记录系统日志
@@ -281,9 +295,12 @@ class TaskScheduler:
     def _execute_config_backup_task(self, db, task):
         """执行配置备份任务"""
         logger.info(f"开始执行配置备份任务 {task.id}")
-        task.logs = "开始执行配置备份任务\n"
+        if not task.logs:
+            task.logs = "开始执行配置备份任务\n"
+        else:
+            task.logs += "开始执行配置备份任务\n"
+        # 注意：不再重新设置started_at，因为它已经在_execute_task中设置
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.utcnow()
         db.commit()  # 提交日志更新
 
         try:
@@ -293,7 +310,8 @@ class TaskScheduler:
 
             if total_devices == 0:
                 task.status = TaskStatus.FAILED
-                task.completed_at = datetime.utcnow()
+                if not task.completed_at:
+                    task.completed_at = get_local_time()
                 task.result = "没有找到目标设备"
                 task.logs += "错误: 没有找到目标设备\n"
                 db.commit()
@@ -513,7 +531,8 @@ class TaskScheduler:
 
             # 更新最终结果
             task.progress = 100
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
 
             if failed_backups == 0:
                 task.status = TaskStatus.COMPLETED
@@ -546,7 +565,8 @@ class TaskScheduler:
         except Exception as e:
             logger.error(f"执行配置备份任务 {task.id} 时出错: {str(e)}", exc_info=True)
             task.status = TaskStatus.FAILED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = f"执行任务时发生错误: {str(e)}"
             task.logs += f"错误: {str(e)}\n"
             db.commit()
@@ -600,9 +620,12 @@ class TaskScheduler:
     def _execute_device_inspection_task(self, db, task):
         """执行设备巡检任务"""
         logger.info(f"开始执行设备巡检任务 {task.id}")
-        task.logs = "开始执行设备巡检任务\n"
+        if not task.logs:
+            task.logs = "开始执行设备巡检任务\n"
+        else:
+            task.logs += "开始执行设备巡检任务\n"
+        # 注意：不再重新设置started_at，因为它已经在_execute_task中设置
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.utcnow()
         db.commit()
 
         try:
@@ -611,7 +634,8 @@ class TaskScheduler:
 
             if total_devices == 0:
                 task.status = TaskStatus.FAILED
-                task.completed_at = datetime.utcnow()
+                if not task.completed_at:
+                    task.completed_at = get_local_time()
                 task.result = "没有找到目标设备"
                 task.logs += "错误: 没有找到目标设备\n"
                 db.commit()
@@ -677,7 +701,8 @@ class TaskScheduler:
 
             task.progress = 100
             task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = f"设备巡检任务完成。成功: {successful_inspections}, 失败: {failed_inspections}"
             task.logs += f"任务完成。成功: {successful_inspections}, 失败: {failed_inspections}\n"
             db.commit()
@@ -698,7 +723,8 @@ class TaskScheduler:
 
         except Exception as e:
             task.status = TaskStatus.FAILED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = str(e)
             task.logs += f"任务执行失败: {str(e)}\n"
             db.commit()
@@ -706,9 +732,12 @@ class TaskScheduler:
     def _execute_firmware_upgrade_task(self, db, task):
         """执行固件升级任务"""
         logger.info(f"开始执行固件升级任务 {task.id}")
-        task.logs = "开始执行固件升级任务\n"
+        if not task.logs:
+            task.logs = "开始执行固件升级任务\n"
+        else:
+            task.logs += "开始执行固件升级任务\n"
+        # 注意：不再重新设置started_at，因为它已经在_execute_task中设置
         task.status = TaskStatus.RUNNING
-        task.started_at = datetime.utcnow()
         db.commit()
 
         try:
@@ -717,7 +746,8 @@ class TaskScheduler:
 
             if total_devices == 0:
                 task.status = TaskStatus.FAILED
-                task.completed_at = datetime.utcnow()
+                if not task.completed_at:
+                    task.completed_at = get_local_time()
                 task.result = "没有找到目标设备"
                 task.logs += "错误: 没有找到目标设备\n"
                 db.commit()
@@ -782,7 +812,8 @@ class TaskScheduler:
 
             task.progress = 100
             task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = f"固件升级任务完成。成功: {successful_upgrades}, 失败: {failed_upgrades}"
             task.logs += f"任务完成。成功: {successful_upgrades}, 失败: {failed_upgrades}\n"
             db.commit()
@@ -803,7 +834,8 @@ class TaskScheduler:
 
         except Exception as e:
             task.status = TaskStatus.FAILED
-            task.completed_at = datetime.utcnow()
+            if not task.completed_at:
+                task.completed_at = get_local_time()
             task.result = str(e)
             task.logs += f"任务执行失败: {str(e)}\n"
             db.commit()
