@@ -48,6 +48,22 @@
             <el-option label="已解决(Resolved)" value="Resolved" />
           </el-select>
         </el-col>
+        <el-col :span="6">
+          <el-button-group>
+            <el-button 
+              :disabled="selectedAlerts.length === 0" 
+              @click="batchAcknowledge"
+            >
+              批量确认
+            </el-button>
+            <el-button 
+              :disabled="selectedAlerts.length === 0" 
+              @click="batchResolve"
+            >
+              批量解决
+            </el-button>
+          </el-button-group>
+        </el-col>
       </el-row>
     </el-card>
     
@@ -63,7 +79,9 @@
         v-loading="loading"
         style="width: 100%"
         stripe
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="time" label="时间" width="180">
           <template #default="{ row }">
@@ -198,6 +216,7 @@ export default {
         totalPages: 0
       },
       dialogVisible: false,
+      selectedAlerts: [],
       selectedAlert: null
     }
   },
@@ -205,6 +224,112 @@ export default {
     this.fetchAlerts()
   },
   methods: {
+    handleSelectionChange(selection) {
+      this.selectedAlerts = selection
+    },
+    
+    async batchAcknowledge() {
+      if (this.selectedAlerts.length === 0) {
+        ElMessage.warning('请至少选择一个告警')
+        return
+      }
+      
+      // 过滤掉已经是已解决状态的告警
+      const unresolvedAlerts = this.selectedAlerts.filter(alert => alert.status !== 'Resolved')
+      
+      if (unresolvedAlerts.length === 0) {
+        ElMessage.warning('所选告警均已解决，无需确认')
+        return
+      }
+      
+      try {
+        await ElMessageBox.confirm(
+          `确认要将选中的 ${unresolvedAlerts.length} 个告警标记为已确认吗？`,
+          '批量确认告警',
+          {
+            confirmButtonText: '确认',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        this.loading = true
+        
+        // 逐个处理告警
+        let successCount = 0
+        for (const alert of unresolvedAlerts) {
+          try {
+            await acknowledgeAlert(alert.id)
+            successCount++
+          } catch (err) {
+            console.error(`确认告警 ${alert.id} 失败:`, err)
+          }
+        }
+        
+        ElMessage.success(`批量确认完成，成功 ${successCount} 个`)
+        
+        // 刷新列表
+        this.fetchAlerts()
+        this.selectedAlerts = []
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量确认失败: ' + (error.message || '未知错误'))
+          console.error('批量确认失败:', error)
+        } else {
+          ElMessage.info('已取消批量确认')
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+    
+    async batchResolve() {
+      if (this.selectedAlerts.length === 0) {
+        ElMessage.warning('请至少选择一个告警')
+        return
+      }
+      
+      try {
+        await ElMessageBox.confirm(
+          `确认要将选中的 ${this.selectedAlerts.length} 个告警标记为已解决吗？`,
+          '批量解决告警',
+          {
+            confirmButtonText: '确认',
+            cancelButtonText: '取消',
+            type: 'warning'
+          }
+        )
+        
+        this.loading = true
+        
+        // 逐个处理告警
+        let successCount = 0
+        for (const alert of this.selectedAlerts) {
+          try {
+            await resolveAlert(alert.id)
+            successCount++
+          } catch (err) {
+            console.error(`解决告警 ${alert.id} 失败:`, err)
+          }
+        }
+        
+        ElMessage.success(`批量解决完成，成功 ${successCount} 个`)
+        
+        // 刷新列表
+        this.fetchAlerts()
+        this.selectedAlerts = []
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量解决失败: ' + (error.message || '未知错误'))
+          console.error('批量解决失败:', error)
+        } else {
+          ElMessage.info('已取消批量解决')
+        }
+      } finally {
+        this.loading = false
+      }
+    },
+    
     async fetchAlerts() {
       this.loading = true
       try {

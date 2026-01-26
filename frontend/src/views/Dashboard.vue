@@ -150,17 +150,6 @@
               </template>
             </el-table-column>
           </el-table>
-          
-          <el-pagination
-            class="alert-pagination"
-            @size-change="handleAlertPageChange"
-            @current-change="handleAlertPageChange"
-            :current-page="alertPagination.currentPage"
-            :page-sizes="[5, 10, 20]"
-            :page-size="alertPagination.pageSize"
-            layout="total, sizes, prev, pager, next"
-            :total="alertPagination.total"
-          />
         </el-card>
       </el-col>
     </el-row>
@@ -449,7 +438,7 @@ const alerts = ref([])
 // 告警分页信息
 const alertPagination = reactive({
   currentPage: 1,
-  pageSize: 5,
+  pageSize: 10,
   total: 0
 })
 
