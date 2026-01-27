@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from app.services.db import Base, engine
@@ -69,7 +70,13 @@ try:
     frontend_dist_dir = Path(__file__).parent.parent / "frontend" / "dist"
     if frontend_dist_dir.exists():
         app.mount("/static", StaticFiles(directory=str(frontend_dist_dir.resolve())), name="static")
+        # 同时挂载assets目录，以便正确加载CSS和JS文件
+        assets_dir = frontend_dist_dir / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir.resolve())), name="assets")
         logger.info(f"静态文件目录已挂载: {frontend_dist_dir.resolve()}")
+        if assets_dir.exists():
+            logger.info(f"前端资源目录已挂载: {assets_dir.resolve()}")
     else:
         logger.warning(f"前端构建目录不存在: {frontend_dist_dir}, 跳过静态文件挂载")
 except Exception as e:
@@ -115,9 +122,18 @@ async def redoc_html():
 async def get_open_api_endpoint():
     return JSONResponse(get_openapi(title="Network Manager API", version=app.version, routes=app.routes))
 
-@app.get("/")
-async def root():
-    return {"message": "NetMgr API is running"}
+@app.get("/", response_class=HTMLResponse)
+async def serve_frontend():
+    """服务前端页面，当访问根路径时返回index.html"""
+    frontend_dist_dir = Path(__file__).parent.parent / "frontend" / "dist"
+    index_file = frontend_dist_dir / "index.html"
+    
+    if index_file.exists():
+        with open(index_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content)
+    else:
+        return HTMLResponse(content="<h1>前端页面未找到，请先构建前端项目</h1>", status_code=404)
 
 @app.get("/health")
 async def health_check():
