@@ -766,10 +766,6 @@ class SNMPAdapter(BaseAdapter):
     def get_device_performance(self):
         """获取设备性能数据"""
         try:
-            if not self.connection:
-                if not self.connect():
-                    raise ConnectionError("无法连接到设备")
-            
             performance_data = {
                 'cpu_usage': None,
                 'memory_usage': None,
@@ -777,13 +773,19 @@ class SNMPAdapter(BaseAdapter):
                 'outbound_bandwidth': 0
             }
             
+            # 确保已连接
+            if not self.transport:
+                if not self.connect():
+                    raise ConnectionError("无法连接到设备")
+            
             # 获取CPU使用率 - 不同厂商的OID不同
             cpu_oid = None
-            if self.device_info['vendor'].lower() == 'cisco':
+            vendor = self.device_info.get('vendor', '').lower()
+            if vendor == 'cisco':
                 cpu_oid = '1.3.6.1.4.1.9.9.109.1.1.1.1.7.1'  # Cisco CPU usage
-            elif self.device_info['vendor'].lower() == 'huawei':
+            elif vendor == 'huawei':
                 cpu_oid = '1.3.6.1.4.1.2011.5.25.31.1.1.1.1.5.10'  # Huawei CPU usage
-            elif self.device_info['vendor'].lower() == 'h3c':
+            elif vendor == 'h3c':
                 cpu_oid = '1.3.6.1.4.1.25506.2.2.1.1.5.1'  # H3C CPU usage
             else:
                 # 尝试标准OID
@@ -791,38 +793,18 @@ class SNMPAdapter(BaseAdapter):
             
             if cpu_oid:
                 try:
-                    errorIndication, errorStatus, errorIndex, varBinds = next(
-                        getCmd(SnmpEngine(),
-                               CommunityData(self.community),
-                               UdpTransportTarget((self.host, self.port)),
-                               ContextData(),
-                               ObjectType(ObjectIdentity(cpu_oid)))
-                    )
-                    
-                    if not errorIndication and not errorStatus:
-                        for varBind in varBinds:
-                            if varBind[1] and str(varBind[1]).isdigit():
-                                performance_data['cpu_usage'] = int(str(varBind[1]))
-                                break
+                    value = self._get_snmp_value(cpu_oid)
+                    if value and value.isdigit():
+                        performance_data['cpu_usage'] = int(value)
                 except Exception as e:
                     logger.warning(f"获取CPU使用率失败: {str(e)}")
             
             # 获取内存使用率
-            memory_oid = '1.3.6.1.2.1.25.2.3.1.6'  # Standard memory usage
+            memory_oid = '1.3.6.1.2.1.25.2.3.1.6.1'  # Standard memory usage (第一个实例)
             try:
-                errorIndication, errorStatus, errorIndex, varBinds = next(
-                    getCmd(SnmpEngine(),
-                           CommunityData(self.community),
-                           UdpTransportTarget((self.host, self.port)),
-                           ContextData(),
-                           ObjectType(ObjectIdentity(memory_oid)))
-                )
-                
-                if not errorIndication and not errorStatus:
-                    for varBind in varBinds:
-                        if varBind[1] and str(varBind[1]).isdigit():
-                            performance_data['memory_usage'] = int(str(varBind[1]))
-                            break
+                value = self._get_snmp_value(memory_oid)
+                if value and value.isdigit():
+                    performance_data['memory_usage'] = int(value)
             except Exception as e:
                 logger.warning(f"获取内存使用率失败: {str(e)}")
             
@@ -836,3 +818,15 @@ class SNMPAdapter(BaseAdapter):
                 'inbound_bandwidth': 0,
                 'outbound_bandwidth': 0
             }
+
+    def get_snmp_value(self, oid: str) -> Any:
+        """
+        公共方法：获取单个SNMP OID的值
+        
+        Args:
+            oid: SNMP OID字符串
+            
+        Returns:
+            OID对应的值，如果获取失败返回None
+        """
+        return self._get_snmp_value(oid)

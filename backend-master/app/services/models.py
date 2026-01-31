@@ -42,6 +42,10 @@ class Device(Base):
     status = Column(String(20), default="unknown")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    #新增设备SNMP配置
+    snmp_community = Column(String(50) ,default="public") 
+    snmp_version = Column(String(10),default="2")
+    snmp_port = Column(Integer, default=161)
 
     # 外键关系
     owner_id = Column(Integer, ForeignKey("users.id"))

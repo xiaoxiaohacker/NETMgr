@@ -1,9 +1,12 @@
 from typing import Dict, Any
+import logging
 from app.adapters.base import BaseAdapter
 from app.adapters.h3c import H3CAdapter
 from app.adapters.huawei import HuaweiAdapter
 from app.adapters.ruijie import RuijieAdapter
 from app.adapters.snmp import SNMPAdapter
+
+logger = logging.getLogger(__name__)
 
 
 class AdapterManager:

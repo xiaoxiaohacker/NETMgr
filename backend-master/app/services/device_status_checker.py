@@ -348,83 +348,30 @@ class DeviceStatusChecker:
     def get_device_performance(self, device):
         """获取设备性能数据，包括CPU、内存使用率等"""
         try:
-            # 构建设备信息用于SNMP连接
+            # 构建设备信息用于适配器连接
+            decrypted_password = decrypt_device_password(device.password) if device.password else None
+            decrypted_enable_password = decrypt_device_password(device.enable_password) if device.enable_password else None
+            
             device_info = {
                 'management_ip': device.management_ip,
-                'snmp_community': device.snmp_community or 'public',
-                'snmp_version': device.snmp_version or 2,
-                'snmp_port': device.snmp_port or 161
+                'vendor': device.vendor,
+                'username': device.username,
+                'password': decrypted_password,
+                'port': device.port or (22 if device.device_type == "ssh" else 23),
+                'device_type': device.device_type or "ssh",
+                'enable_password': decrypted_enable_password,
+                'snmp_community': device.snmp_community,
+                'snmp_version':  device.snmp_version,
+                'snmp_port':  device.snmp_port
             }
 
-            # 尝试通过SNMP获取性能数据
-            adapter = SNMPAdapter(device_info)
+            # 使用AdapterManager获取适配器
+            adapter = AdapterManager.get_adapter(device_info)
 
-            cpu_usage = None
-            memory_usage = None
+            # 直接调用适配器的get_device_performance方法
+            performance_data = adapter.get_device_performance()
             
-            # 尝试获取CPU使用率 - 根据厂商使用不同OID
-            if device.vendor and device.vendor.lower() == 'cisco':
-                # Cisco CPU OID
-                cpu_oid = '.1.3.6.1.4.1.9.9.109.1.1.1.1.7.0'
-                cpu_result = adapter.get_snmp_value(cpu_oid)
-                if cpu_result and cpu_result.isdigit():
-                    cpu_usage = int(cpu_result)
-                else:
-                    # 如果Cisco专用OID失败，尝试通用OID
-                    cpu_result = adapter.get_snmp_value(adapter.HOST_RESOURCES_CPULOAD1)
-                    if cpu_result and cpu_result.isdigit():
-                        cpu_usage = int(cpu_result)
-            elif device.vendor and device.vendor.lower() == 'huawei':
-                # Huawei CPU OID
-                cpu_oid = '.1.3.6.1.4.1.2011.5.25.31.1.1.1.1.5.0'
-                cpu_result = adapter.get_snmp_value(cpu_oid)
-                if cpu_result and cpu_result.isdigit():
-                    cpu_usage = int(cpu_result)
-                else:
-                    # 如果Huawei专用OID失败，尝试通用OID
-                    cpu_result = adapter.get_snmp_value(adapter.HOST_RESOURCES_CPULOAD1)
-                    if cpu_result and cpu_result.isdigit():
-                        cpu_usage = int(cpu_result)
-            else:
-                # 尝试标准CPU OID
-                cpu_result = adapter.get_snmp_value(adapter.HOST_RESOURCES_CPULOAD1)
-                if cpu_result and cpu_result.isdigit():
-                    cpu_usage = int(cpu_result)
-
-            # 获取内存使用率
-            total_mem_result = adapter.get_snmp_value(adapter.HOST_RESOURCES_MEM_TOTAL)
-            used_mem_result = adapter.get_snmp_value(adapter.HOST_RESOURCES_MEM_USED)
-
-            if total_mem_result and used_mem_result:
-                try:
-                    total_mem = int(total_mem_result)
-                    used_mem = int(used_mem_result)
-                    if total_mem > 0:
-                        memory_usage = int((used_mem / total_mem) * 100)
-                except ValueError:
-                    pass
-
-            # 获取接口流量信息
-            interfaces = adapter.get_interfaces()
-            inbound_bandwidth = 0
-            outbound_bandwidth = 0
-
-            if interfaces:
-                # 取第一个接口的流量信息
-                first_interface = interfaces[0]
-                inbound_octets = first_interface.get('in_octets', 0)
-                outbound_octets = first_interface.get('out_octets', 0)
-
-                inbound_bandwidth = int(inbound_octets) if inbound_octets else 0
-                outbound_bandwidth = int(outbound_octets) if outbound_octets else 0
-
-            # 返回性能数据
-            return {
-                'cpu_usage': cpu_usage if cpu_usage is not None else 0,
-                'memory_usage': memory_usage if memory_usage is not None else 0,
-                'inbound_bandwidth': inbound_bandwidth,
-                'outbound_bandwidth': outbound_bandwidth
-            }
+            return performance_data
             
         except Exception as e:
             logger.error(f"获取设备性能数据失败 {device.management_ip}: {str(e)}")
