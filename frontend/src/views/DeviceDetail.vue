@@ -135,11 +135,20 @@
     
     <el-row :gutter="20" style="margin-top: 20px;">
       <el-col :span="24">
-        <el-tabs type="border-card">
-          <el-tab-pane label="SNMP配置">
-            <SNMP />
-          </el-tab-pane>
-        </el-tabs>
+        <el-card class="snmp-config-card">
+          <template #header>
+            <div class="card-header">
+              <span>SNMP配置</span>
+              <el-button type="primary" @click="showSNMPEditDialog">编辑SNMP配置</el-button>
+            </div>
+          </template>
+          
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="团体名">{{ device.snmp_community }}</el-descriptions-item>
+            <el-descriptions-item label="协议版本">{{ device.snmp_version }}</el-descriptions-item>
+            <el-descriptions-item label="监听端口号">{{ device.snmp_port }}</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
       </el-col>
     </el-row>
     
@@ -180,6 +189,37 @@
         <span class="dialog-footer">
           <el-button @click="editDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="saveDevice">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 编辑SNMP配置对话框 -->
+    <el-dialog title="编辑SNMP配置" v-model="snmpEditDialogVisible" width="500px">
+      <el-form :model="snmpEditForm" label-width="100px">
+        <el-form-item label="团体名">
+          <el-input v-model="snmpEditForm.snmp_community" placeholder="请输入SNMP团体名" />
+        </el-form-item>
+        <el-form-item label="协议版本">
+          <el-select v-model="snmpEditForm.snmp_version" placeholder="请选择SNMP版本">
+            <el-option label="v1" value="1" />
+            <el-option label="v2c" value="2" />
+            <el-option label="v3" value="3" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="监听端口号">
+          <el-input-number 
+            v-model="snmpEditForm.snmp_port" 
+            :min="1" 
+            :max="65535" 
+            placeholder="默认161"
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="snmpEditDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveSNMPConfig">确定</el-button>
         </span>
       </template>
     </el-dialog>
@@ -269,19 +309,15 @@ const backupsLoading = ref(false)
 const editDialogVisible = ref(false)
 const terminalVisible = ref(false)
 const configDialogVisible = ref(false)
-
-// 终端相关
-const terminalOutput = ref(null)
-const terminalInput = ref(null)
-const terminalCommand = ref('')
-const sendingCommand = ref(false)
-const commandHistory = ref([])
-// 添加连接状态相关变量
-const sessionToken = ref(null)  // 保存会话令牌
-const isConnected = ref(false)  // 连接状态
+const snmpEditDialogVisible = ref(false)
 
 // 表单数据
 const editDeviceForm = reactive({})
+const snmpEditForm = reactive({
+  snmp_community: '',
+  snmp_version: 'v2c',
+  snmp_port: 161
+})
 
 // 配置内容
 const configContent = ref('')
@@ -298,6 +334,11 @@ const loadDevice = async () => {
     const response = await getDevice(deviceId)
     device.value = response
     Object.assign(editDeviceForm, response)
+    
+    // Initialize SNMP form with device data
+    snmpEditForm.snmp_community = response.snmp_community || ''
+    snmpEditForm.snmp_version = response.snmp_version || 'v2c'
+    snmpEditForm.snmp_port = response.snmp_port || 161
     
     // 获取设备详细信息并更新到数据库
     try {
@@ -872,6 +913,43 @@ const downloadConfig = () => {
   
   // 释放URL对象
   window.URL.revokeObjectURL(url)
+}
+
+// 保存SNMP配置
+const saveSNMPConfig = async () => {
+  try {
+    const deviceId = route.params.id
+    const snmpData = {
+      snmp_community: snmpEditForm.snmp_community,
+      snmp_version: snmpEditForm.snmp_version,
+      snmp_port: snmpEditForm.snmp_port
+    }
+    
+    await updateDevice(deviceId, { ...device.value, ...snmpData })
+    ElMessage.success('SNMP配置更新成功')
+    snmpEditDialogVisible.value = false
+    loadDevice()
+  } catch (error) {
+    // 特别处理认证错误
+    if (error.response && error.response.status === 401) {
+      ElMessage.error('登录已过期，请重新登录')
+      // 清除本地存储并跳转到登录页
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('systemName')
+      if (window.location.hash !== '#/login') {
+        window.location.hash = '#/login'
+      }
+      return
+    }
+    
+    ElMessage.error('更新SNMP配置失败: ' + error.message)
+  }
+}
+
+// 显示SNMP编辑对话框
+const showSNMPEditDialog = () => {
+  snmpEditDialogVisible.value = true
 }
 
 // 页面加载时获取数据

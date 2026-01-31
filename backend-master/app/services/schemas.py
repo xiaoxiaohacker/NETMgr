@@ -48,6 +48,9 @@ class DeviceBase(BaseModel):
     device_type: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = "unknown"
+    snmp_community: Optional[str] = Field("public", max_length=50)
+    snmp_version: Optional[str] = Field("2", max_length=10)
+    snmp_port: Optional[int] = 161
 
 class DeviceCreate(DeviceBase):
     password: str
@@ -67,6 +70,12 @@ class DeviceUpdate(BaseModel):
     device_type: Optional[str] = Field(None, max_length=50)
     location: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = None
+    snmp_community: Optional[str] = Field(None, max_length=50)
+    snmp_version: Optional[str] = Field(None, max_length=10)
+    snmp_port: Optional[int] = None
+    snmp_community: Optional[str] = Field(None, max_length=50)
+    snmp_version: Optional[str] = Field(None, max_length=10)
+    snmp_port: Optional[int] = None
 
 class DeviceOut(DeviceBase):
     id: int
