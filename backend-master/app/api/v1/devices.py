@@ -129,6 +129,7 @@ def batch_import_devices(
                 
                 # 创建设备数据 - 根据用户提供的CSV文件格式说明调整字段映射
                 # CSV字段顺序：1.设备名称, 2.管理IP, 3.厂商, 4.用户名, 5.密码, 6.特权密码(可选), 7.端口(可选), 8.设备型号(可选), 9.软件版本(可选), 10.序列号(可选), 11.位置(可选), 12.设备类型(可选)
+                
                 device_data = {
                     "name": device_row[0].strip() or None,
                     "management_ip": device_row[1].strip(),
@@ -150,6 +151,17 @@ def batch_import_devices(
                         device_data["port"] = int(device_row[6].strip())
                     except ValueError:
                         pass
+                
+                # 加密密码和特权密码
+                encrypted_password = encrypt_device_password(device_data["password"])
+                encrypted_enable_password = (
+                    encrypt_device_password(device_data["enable_password"]) 
+                    if device_data["enable_password"] else None
+                )
+                
+                # 更新设备数据中的密码字段为加密后的值
+                device_data["password"] = encrypted_password
+                device_data["enable_password"] = encrypted_enable_password
                 
                 # 验证设备数据
                 device_create = DeviceCreate(**device_data)
