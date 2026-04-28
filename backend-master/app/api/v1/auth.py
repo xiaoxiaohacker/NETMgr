@@ -69,7 +69,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             username=user.username,
             email=user.email,
             hashed_password=hash_password(user.password),
-            is_active=True
+            is_active=user.is_active,
+            role=user.role  # 设置用户角色
         )
         
         # 保存到数据库
