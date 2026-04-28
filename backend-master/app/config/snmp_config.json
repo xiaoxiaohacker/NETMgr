@@ -1,5 +1,5 @@
 {
-  "trap_listen_address": "192.168.110.253",
+  "trap_listen_address": "0.0.0.0",
   "trap_listen_port": 162,
   "community_strings": [
     "public"

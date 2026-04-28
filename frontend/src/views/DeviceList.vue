@@ -1,3 +1,4 @@
+
 <template>
   <div class="device-management">
     <h1>设备管理</h1>
@@ -232,7 +233,14 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="importDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitImport">导入</el-button>
+          <el-button 
+            type="primary" 
+            @click="submitImport" 
+            :loading="importing"
+            :disabled="!importFile || importing"
+          >
+            {{ importing ? '导入中...' : '导入' }}
+          </el-button>
         </span>
       </template>
     </el-dialog>
@@ -287,6 +295,7 @@ const isEdit = ref(false)
 // 文件上传引用
 const uploadRef = ref(null)
 const importFile = ref(null)
+const importing = ref(false) // 添加导入加载状态
 
 // 当前编辑的设备
 const currentDevice = reactive({
@@ -327,32 +336,58 @@ const totalFilteredDevices = ref(0)
 const sortProperty = ref('id')
 const sortOrder = ref('ascending') // 'ascending' 或 'descending'
 
+// 添加搜索防抖功能
+const debouncedSearch = debounce((value) => {
+  searchText.value = value
+  currentPage.value = 1 // 重置到第一页
+}, 500) // 增加防抖时间到500ms，减少频繁计算
+
+// 防抖函数
+function debounce(func, wait) {
+  let timeout
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
 // 计算过滤后的设备列表（包含分页和排序）
 const filteredDevices = computed(() => {
+  // 如果正在加载，返回空数组避免闪烁
+  if (loading.value) {
+    return []
+  }
+  
   let result = [...devices.value] // 创建副本避免修改原始数据
   
   // 处理普通文本搜索
   if (searchText.value) {
-    const searchTerms = searchText.value.toLowerCase().trim().split(/\s+/)
-    result = result.filter(device => {
-      // 搜索设备的所有文本字段
-      const searchableFields = [
-        device.name,
-        device.management_ip,
-        device.vendor,
-        device.model,
-        device.os_version,
-        device.serial_number,
-        device.location,
-        device.device_type,
-        device.status
-      ].filter(Boolean) // 过滤掉undefined或null值
-      
-      const searchText = searchableFields.join(' ').toLowerCase()
-      
-      // 支持多关键词搜索（AND关系）
-      return searchTerms.every(term => searchText.includes(term))
-    })
+    const searchTerms = searchText.value.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0)
+    if (searchTerms.length > 0) {
+      result = result.filter(device => {
+        // 搜索设备的所有文本字段
+        const searchableFields = [
+          device.name,
+          device.management_ip,
+          device.vendor,
+          device.model,
+          device.os_version,
+          device.serial_number,
+          device.location,
+          device.device_type,
+          device.status
+        ].filter(Boolean) // 过滤掉undefined或null值
+        
+        const searchText = searchableFields.join(' ').toLowerCase()
+        
+        // 支持多关键词搜索（AND关系）
+        return searchTerms.every(term => searchText.includes(term))
+      })
+    }
   }
   
   // 处理高级搜索
@@ -416,25 +451,6 @@ const filteredDevices = computed(() => {
   const end = start + pageSize.value
   return result.slice(start, end)
 })
-
-// 添加搜索防抖功能
-const debouncedSearch = debounce((value) => {
-  searchText.value = value
-  currentPage.value = 1 // 重置到第一页
-}, 300)
-
-// 防抖函数
-function debounce(func, wait) {
-  let timeout
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout)
-      func(...args)
-    }
-    clearTimeout(timeout)
-    timeout = setTimeout(later, wait)
-  }
-}
 
 // 修改处理选择变化的函数
 const handleSelectionChange = (selection) => {
@@ -904,19 +920,36 @@ const submitImport = async () => {
     return
   }
 
+  importing.value = true // 开始导入，显示加载状态
+  
   const formData = new FormData()
   formData.append('file', importFile.value)
 
   try {
     const response = await batchImportDevices(formData)
+    
+    // 确保响应数据存在
+    if (!response || typeof response !== 'object') {
+      throw new Error('服务器返回数据格式异常')
+    }
+    
     // 正确地访问响应数据中的导入计数
     const importedCount = response.success || 0
-    ElMessage.success(`设备导入完成！成功导入 ${importedCount} 条记录，失败 ${response.failed || 0} 条`)
+    const failedCount = response.failed || 0
+    
+    if (importedCount > 0) {
+      ElMessage.success(`设备导入完成！成功导入 ${importedCount} 条记录${failedCount > 0 ? `，失败 ${failedCount} 条` : ''}`)
+    } else if (failedCount > 0) {
+      ElMessage.error(`设备导入失败！共 ${failedCount} 条记录导入失败`)
+    } else {
+      ElMessage.warning('没有设备被导入，请检查CSV文件格式')
+    }
+    
     importDialogVisible.value = false
     loadDevices()
     
     // 显示详细的失败信息（如果有）
-    if (response.failed > 0 && response.failed_devices && response.failed_devices.length > 0) {
+    if (failedCount > 0 && response.failed_devices && response.failed_devices.length > 0) {
       let failMessages = '部分设备导入失败:\n'
       response.failed_devices.slice(0, 5).forEach((fail, index) => {
         failMessages += `${index + 1}. 第${fail.row}行: ${fail.error}\n`
@@ -924,10 +957,37 @@ const submitImport = async () => {
       if (response.failed_devices.length > 5) {
         failMessages += `...还有${response.failed_devices.length - 5}个失败项`
       }
-      ElMessage.warning(failMessages)
+      ElMessage({
+        message: failMessages,
+        type: 'warning',
+        duration: 5000
+      })
     }
   } catch (error) {
-    ElMessage.error('导入失败: ' + error.message)
+    console.error('批量导入失败:', error)
+    let errorMessage = '导入失败'
+    if (error.response) {
+      // HTTP错误
+      if (error.response.status === 400) {
+        errorMessage = '文件格式错误或数据验证失败'
+      } else if (error.response.status === 401) {
+        errorMessage = '登录已过期，请重新登录'
+        // 清除本地存储并跳转到登录页
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('username')
+        if (window.location.hash !== '#/login') {
+          window.location.hash = '#/login'
+        }
+        return
+      } else if (error.response.data && error.response.data.detail) {
+        errorMessage = error.response.data.detail
+      }
+    } else if (error.message) {
+      errorMessage = error.message
+    }
+    ElMessage.error('导入失败: ' + errorMessage)
+  } finally {
+    importing.value = false // 导入完成，隐藏加载状态
   }
 }
 
