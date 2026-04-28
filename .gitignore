@@ -1,0 +1,11 @@
+# 忽略配置备份目录
+backend-master/config_backups/
+
+# 其他常见的忽略项
+*.pyc
+__pycache__/
+venv/
+.env
+.DS_Store
+node_modules/
+dist/
