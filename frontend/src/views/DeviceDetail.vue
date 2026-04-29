@@ -311,6 +311,16 @@ const terminalVisible = ref(false)
 const configDialogVisible = ref(false)
 const snmpEditDialogVisible = ref(false)
 
+// 终端相关
+const terminalOutput = ref(null)
+const terminalInput = ref(null)
+const terminalCommand = ref('')
+const sendingCommand = ref(false)
+const commandHistory = ref([])
+// 添加连接状态相关变量
+const sessionToken = ref(null)  // 保存会话令牌
+const isConnected = ref(false)  // 连接状态
+
 // 表单数据
 const editDeviceForm = reactive({})
 const snmpEditForm = reactive({
@@ -974,57 +984,55 @@ onMounted(() => {
 .operations {
   display: flex;
   flex-direction: column;
-}
-
-.config-content {
-  max-height: 400px;
-  overflow-y: auto;
-  background-color: #f5f5f5;
-  padding: 10px;
-  border-radius: 4px;
-  white-space: pre-wrap;
+  gap: 10px;
 }
 
 .terminal-container {
-  height: 500px;
+  height: 400px;
   display: flex;
   flex-direction: column;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
 .terminal-output {
   flex: 1;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
   padding: 10px;
-  margin-bottom: 10px;
   background-color: #000;
   color: #0f0;
   font-family: 'Courier New', monospace;
   font-size: 14px;
   overflow-y: auto;
-  min-height: 300px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .terminal-line {
-  margin-bottom: 5px;
-  line-height: 1.5;
+  margin: 0;
+  padding: 2px 0;
+  line-height: 1.4;
 }
 
 .terminal-welcome {
-  color: #909399;
-  margin-bottom: 10px;
-}
-
-.terminal-command {
-  color: #67c23a;
-}
-
-.terminal-error {
-  color: #f56c6c;
+  color: #0ff;
+  font-style: italic;
 }
 
 .terminal-input-area {
   display: flex;
-  align-items: center;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-top: 1px solid #dcdfe6;
+}
+
+.config-content {
+  white-space: pre-wrap;
+  font-family: monospace;
+  background-color: #f5f5f5;
+  padding: 15px;
+  border-radius: 4px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 </style>
